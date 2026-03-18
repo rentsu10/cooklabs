@@ -1,181 +1,478 @@
-<?php
-require_once __DIR__ . '/../inc/config.php';
-
-?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LMS · company logo welcome</title>
-    <link href="<?= BASE_URL ?>/assets/css/index.css" rel="stylesheet">
+    <title>CookLabs · LMS · clean sharp</title>
+    <link rel="icon" type="image/png" href="../uploads/images/cooklabs-mini-logo.png">
+    <!-- Font Awesome 6 -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <!-- Google Fonts: Inter (geometric friendly) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
     <style>
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
-            font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         }
 
         body {
-            background-image: url('../uploads/images/armmc-bg.png');
-            background-size: cover;
-            background-position: center;
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 1.5rem;
-        }
-        
-         .overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background-color: rgba(0, 35, 102, 0.4); /* Dark royal */
-        z-index: -1;
-    }
-    
-        .content {
-        position: relative;
-        padding: 50px;
-        color: white;
-        text-shadow: 1px 1px 3px rgba(0,0,0,0.5);
-        z-index: 1;
-    }
-
-        /* main welcome card */
-        .welcome-card {
-            max-width: 1280px;
-            width: 100%;
-            background: rgba(255,255,255,0.7);
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
-            border-radius: 3.5rem;
-            box-shadow: 
-                0 30px 60px -20px rgba(0,40,80,0.25),
-                0 8px 20px -8px rgba(0,32,64,0.1),
-                inset 0 1px 1px rgba(255,255,255,0.6);
-            border: 1px solid rgba(255,255,255,0.6);
-            padding: 3rem 2.5rem;
-        }
-
-        /* two-column layout */
-        .grid-layout {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 2.5rem;
-            align-items: center;
-        }
-
-        /* left side – company logo as MAIN SUBJECT (PNG placeholder) */
-        .logo-hero {
-            background: rgba(255,255,255,0.5);
-            backdrop-filter: blur(4px);
-            -webkit-backdrop-filter: blur(4px);
-            border-radius: 2.5rem;
-            padding: 3rem 2rem;
-            box-shadow: 0 20px 30px -10px rgba(0,20,40,0.15);
-            border: 1px solid rgba(255,255,255,0.8);
-            transition: transform 0.3s ease;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-
-        .logo-hero:hover {
-            transform: scale(1.01);
-            background: rgba(255,255,255,0.65);
-        }
-
-        /* logo container: the main subject */
-        .logo-main {
+            font-family: 'Inter', sans-serif;
+            /* background removed — image will be set via inline style on body */
+            color: #13294b;
+            height: 100vh;          /* exactly viewport height */
             display: flex;
             flex-direction: column;
+            overflow: hidden;        /* prevent scrolling */
+        }
+
+        /* geometric overlay removed — you can keep or delete this block entirely */
+        /* body::before removed as requested */
+
+        .wrapper {
+            position: relative;
+            z-index: 5;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 1rem 2rem;      /* reduced padding to fit */
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            height: 100%;             /* fill parent */
+        }
+
+        /* ---------- SHARP HEADER — no rounded corners, no clutter ---------- */
+        .sharp-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: nowrap;        /* prevent wrapping */
+            gap: 1.5rem;
+            background: #ffffff;
+            border: 2px solid #1e4f7a;
+            box-shadow: 8px 8px 0 #1e3f60;
+            padding: 0.5rem 2rem;     /* slightly tighter */
+            border-radius: 0px;
+            margin-top: 1.5rem;
+        }
+
+        .logo-block {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        /* dedicated logo container for header */
+        .header-logo-container {
+            width: 48px;              /* slightly smaller */
+            height: 48px;
+            display: flex;
             align-items: center;
             justify-content: center;
+            border-radius: 0px;
+        }
+
+        .header-logo-container img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+
+        .logo-name {
+            font-size: 1.8rem;        /* adjusted */
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            color: #0a2d4b;
+            border-right: 3px solid #2367a3;
+            padding-right: 1rem;
+            line-height: 1.2;
+        }
+
+        .logo-name span {
+            font-weight: 400;
+            color: #3677b5;
+            margin-left: 6px;
+        }
+
+        /* auth buttons */
+        .auth-row {
+            display: flex;
+            gap: 0.8rem;
+        }
+
+        .btn {
+            font-family: 'Inter', sans-serif;
+            font-weight: 600;
+            font-size: 1rem;          /* slightly smaller */
+            padding: 0.5rem 1.8rem;
+            border: 2px solid #0f3d5e;
+            background: white;
+            color: #0a314b;
+            cursor: pointer;
+            transition: all 0.1s ease;
+            box-shadow: 5px 5px 0 #123a57;
+            border-radius: 0px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            text-decoration: none;
+        }
+
+        .btn i {
+            color: #1e5f96;
+        }
+
+        .btn-register {
+            background: #1661a3;
+            color: white;
+            border-color: #0c314d;
+            box-shadow: 5px 5px 0 #0b263b;
+        }
+
+        .btn-register i {
+            color: #cde1ff;
+        }
+
+        .btn:hover {
+            transform: translate(-2px, -2px);
+            box-shadow: 8px 8px 0 #123450;
+        }
+
+        .btn:active {
+            transform: translate(2px, 2px);
+            box-shadow: 2px 2px 0 #123450;
+        }
+
+        /* ---------- HERO: ultra clean, sharp, fits without scroll ---------- */
+        .hero-geometric {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 2rem;
+            margin: 1.5rem 0 1rem;   /* reduced vertical margins */
+            flex: 1;                  /* take remaining space */
+            min-height: 0;            /* important for flex children */
+        }
+
+        .hero-left {
+            flex: 1 1 450px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        /* logo inside hero-left (restored) */
+        .hero-logo-container {
+            width: 600px;              /* appropriate size */
+            height: 300px;
+            margin-bottom: 1rem;
+            display: flex;
+            justify-content: flex-start;
+        }
+
+        .hero-logo-container img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+
+        .hero-left h1 {
+            font-size: 3.2rem;         /* slightly reduced */
+            font-weight: 700;
+            line-height: 1.1;
+            color: #07223b;
+            margin-bottom: 0.75rem;
+            border-left: 10px solid #1d6fb0;
+            padding-left: 1.2rem;
+        }
+
+        .hero-left h1 i {
+            color: #2680cf;
+            font-size: 2.8rem;
+            margin-right: 10px;
+        }
+
+        .sharp-badge {
+            background: white;
+            border: 2px solid #104a77;
+            box-shadow: 5px 5px 0 #184369;
+            padding: 0.5rem 1.8rem;
+            display: inline-block;
+            margin: 0.3rem 0 1rem;
+            margin-top: 1rem;
+            font-weight: 600;
+            font-size: 1rem;
+            color: #0a3458;
+            border-radius: 0px;
+            width: fit-content;
+        }
+
+        .sharp-badge i {
+            color: #1c6fb0;
+            margin-right: 8px;
+        }
+
+        .hero-left p {
+            font-size: 1rem;
+            color: #1e4465;
+            max-width: 500px;
+            margin-bottom: 0.8rem;
+        }
+
+        .simple-tagline {
+            font-size: 1rem;
+            font-weight: 500;
+            color: #10487a;
+            margin-top: 0.8rem;
+            border-left: 3px solid #307fc7;
+            padding-left: 1rem;
+        }
+
+        /* ===== REDESIGNED HERO-RIGHT ===== */
+        /* hero-right divided into two horizontal divisions */
+        .hero-right {
+            flex: 1 1 500px;
+            background: #d7e9ff;
+            border: 3px solid #15415e;
+            box-shadow: 12px 12px 0 #1b3b58;
+            border-radius: 0px;
+            display: flex;
+            flex-direction: column;
+            padding: 1.5rem;
+            gap: 1.5rem;
+            width: 650px;        /* Fixed width */
+            height: 600px;       /* Fixed height */
+            max-width: 650px;    /* Prevents growing beyond this */
+            max-height: 600px;   /* Prevents growing beyond this */
+        }
+
+        /* each horizontal division takes equal space */
+        .hero-right-top,
+        .hero-right-bottom {
+            flex: 1;
+            background: rgba(255, 255, 255, 0.3);
+            border: 2px solid #1b5790;
+            box-shadow: 5px 5px 0 #1a4270;
+            padding: 1.2rem;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            min-height: 0; /* Important for flex children */
+        }
+
+        /* logo placeholder in upper right corner */
+        .logo-placeholder {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            width: 80px;   /* Default size, can be adjusted via inline style or class */
+            height: 80px;  /* Default size */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: transparent;
+        }
+
+        .logo-placeholder img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+
+        /* container for title and description */
+        .text-content {
+            margin-top: auto;
+            margin-bottom: auto;
+            padding-right: 90px; /* Make room for logo */
             width: 100%;
+        }
+
+        .title-container {
+            background: white;
+            border: 2px solid #14568a;
+            box-shadow: 4px 4px 0 #1d4670;
+            padding: 0.5rem 1rem;
+            margin-bottom: 0.8rem;
+            border-radius: 0px;
+            font-weight: 700;
+            font-size: 1.2rem;
+            color: #073457;
+            display: inline-block;
+        }
+
+        .description-container {
+            background: white;
+            border: 2px solid #14568a;
+            box-shadow: 4px 4px 0 #1d4670;
+            padding: 0.8rem 1rem;
+            border-radius: 0px;
+            font-size: 0.9rem;
+            color: #0f3960;
+            line-height: 1.4;
+        }
+
+        /* optional adjuster classes for logo sizes */
+        .logo-small {
+            width: 60px;
+            height: 60px;
+        }
+        .logo-medium {
+            width: 80px;
+            height: 80px;
+        }
+        .logo-large {
+            width: 100px;
+            height: 100px;
+        }
+
+        /* ---------- FOOTER sharp, minimal ---------- */
+        .sharp-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.8rem 0 0.3rem;
+            border-top: 4px solid #245e91;
+            color: #113b5e;
+            flex-wrap: nowrap;
+            gap: 1rem;
+            margin-top: auto;          /* push to bottom */
+        }
+
+        .footer-links {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .footer-links a {
+            text-decoration: none;
+            color: #0e3f64;
+            font-weight: 600;
+            border-bottom: 3px solid transparent;
+            font-size: 0.9rem;
+            white-space: nowrap;
+        }
+
+        .footer-links a:hover {
+            border-bottom-color: #0e3f64;
+        }
+
+        .sharp-stamp {
+            font-size: 0.9rem;
+            text-align: right;
+        }
+
+        .sharp-stamp i {
+            color: #296ea8;
+            margin: 0 4px;
+        }
+
+        @media (max-width: 1100px) {
+            .hero-geometric {
+                flex-direction: column;
+                overflow-y: auto;
+            }
+            body { overflow: hidden; }
+            
+            .hero-right {
+                width: 100%;
+                max-width: 100%;
+                height: auto;
+                max-height: none;
+            }
+            
+            .footer-links {
+                flex-wrap: wrap;
+            }
         }
     </style>
 </head>
-<body>
-    <div class="overlay"></div>
-    <div class="welcome-card">
-        <div class="grid-layout">
-            <!-- LEFT SIDE: COMPANY LOGO AS MAIN SUBJECT – now PNG placeholder -->
-            <div class="logo-hero">
-                <div class="logo-main">
-                    <img 
-                        class="company-logo-png" 
-                        src="../uploads/images/armmc-logo.png" 
-                        alt="Company logo – main visual"
-                        title="Your company logo"
-                    >
-                    <!-- company name below logo – reinforces main subject -->
-                    <div class="logo-caption">
-                        <i class="fas fa-circle" style="font-size: 0.4rem; vertical-align: middle; color: #1f6fb0;"></i> 
-                        AMANG RODRIGUEZ MEMORIAL MEDICAL CENTER 
-                        <i class="fas fa-circle" style="font-size: 0.4rem; vertical-align: middle; color: #1f6fb0;"></i>
-                    </div>
+<!-- background image applied here — replace 'YOUR_IMAGE_URL.jpg' with actual path -->
+<body style="background: url('../uploads/images/cooklabs-bg.png') no-repeat center center fixed; background-size: cover;">
+    <div class="wrapper">
+        <header class="sharp-header">
+            <div class="logo-block">
+                <!-- optional header logo container (empty but present) -->
+                <!-- <div class="header-logo-container"><img src="../uploads/images/cooklabs-logo.png" alt="CookLabs Logo"></div> -->
+                <div class="logo-name">
+                    CookLabs<span>·LMS</span>
+                </div>
+                <i class="fas fa-cube" style="color:#2170b3; font-size: 1.5rem; margin-left: -0.2rem;"></i>
+            </div>
+            <div class="auth-row">
+                <a href="../public/login.php" class="btn"><i class="fas fa-gear"></i> Login</a>
+                <a href="../public/register.php" class="btn btn-register"><i class="fas fa-cube"></i> Register</a>
+            </div>
+        </header>
+
+        <div class="hero-geometric">
+            <div class="hero-left">
+                <div class="hero-logo-container">
+                    <img src="../uploads/images/cooklabs-logo.png" alt="CookLabs Logo">
+                </div>
+                <div class="sharp-badge">
+                    <i class="fas fa-cubes"></i> A Learning Platform for Cookery NCII Students of IETI·Marikina 
+                </div>
+                <p>
+                    blah blah blah blah blah blah blah blah blah blah . 
+                    blah blah blah blah blah blah blah blah blah blah blah blah blah blah .
+                </p>
+                <div class="simple-tagline">
+                    <i class="fas fa-knife"></i> blah blah &nbsp;&nbsp; <i class="fas fa-egg"></i>  blah blah 
                 </div>
             </div>
 
-            <!-- RIGHT SIDE: Welcome message and LMS info -->
-            <div class="welcome-content">
-                <h1 class="welcome-title">
-                    welcome to <span>ARMMC LMS</span>
-                </h1>
-                <p class="welcome-description">
-                    Transform your learning experience with our comprehensive Learning Management System. 
-               Access courses, track progress, and connect with educators in one seamless platform.
-                </p>
-
-                <!-- micro features (relevant to LMS) -->
-                <div class="feature-grid">
-                    <div class="feature-item">
-                        <i class="fas fa-video"></i> <span>Interactive courses</span>
+            <!-- ===== hero right added back ===== -->
+            <div class="hero-right">
+                <!-- top horizontal division -->
+                <div class="hero-right-top">
+                    <div class="logo-placeholder logo-medium">
+                        <img src="../uploads/images/ieti-logo.png" alt="logo">
                     </div>
-                    <div class="feature-item">
-                        <i class="fas fa-chart-line"></i> <span>Progress tracking</span>
-                    </div>
-                    <div class="feature-item">
-                        <i class="fas fa-users"></i> <span>Collaborative</span>
-                    </div>
-                    <div class="feature-item">
-                        <i class="fas fa-certificate"></i> <span>Certification</span>
+                    <div class="text-content">
+                        <div class="title-container">
+                            <i class="fas fa-kitchen-set"></i> Fundamentals
+                        </div>
+                        <div class="description-container">
+                            Knife skills, stocks, and safety — foundation modules for NCII.
+                        </div>
                     </div>
                 </div>
-
-                <!-- call to actions -->
-                <div class="cta-group" style="margin-top: 0.5rem; margin-left: 190px;">
-                    <button class="btn-primary">
-                        <a href="../public/login.php" class="auth-btn login-btn" style="color: white; text-decoration: none;">
-                            <i class="fas fa-rocket"></i> Get Started
-                        </a>
-                    </button>
-                </div>
-                
-
-                <!-- subtle bottom note / additional trust text -->
-             
-                <div class="bottom-note">
-                    <span class="line"></span>
-                    <span>ARMMC Learning Management System. All rights reserved 2026.</span><span class="line"></span>
-                </div>
-                <div class="bottom-note" style="margin-top: 0.5rem; margin-left: 250px;">
-                    <span>iMISS</span>
-                </div>
-
-                <div class="bottom-note" style="margin-top: 0.5rem; margin-left: 128px;">
-                    <span><a href="#">Privacy Policy |</a>
-                    <span><a href="#"> Terms and Condition |</a>
-                    <span><a href="<?= BASE_URL ?>/public/contact_form.php"> Contact Us</a>
+                <!-- bottom horizontal division -->
+                <div class="hero-right-bottom">
+                    <div class="logo-placeholder logo-medium">
+                        <img src="../uploads/images/tesda-logo.png" alt="logo">
+                    </div>
+                    <div class="text-content">
+                        <div class="title-container">
+                            <i class="fas fa-fire"></i> Signature dishes
+                        </div>
+                        <div class="description-container">
+                            Adobo, sinigang, and plating techniques — heritage cooking.
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
+
+        <footer class="sharp-footer">
+            <div class="footer-links">
+                <a href="#"><i class="fas fa-circle-info"></i> about</a>
+                <a href="#"><i class="fas fa-phone"></i> contact</a>
+                <a href="#"><i class="fas fa-file"></i> privacy policy</a>
+                <a href="#"><i class="fas fa-circle-check"></i> terms of service</a>
+            </div>
+            <div class="sharp-stamp">
+                <i class="fas fa-copyright"></i> 2026 CookLabs LMS · IETI College of Science and Technology·Marikina
+            </div>
+        </footer>
+    </div>
+
+    <div style="position: fixed; bottom: 10px; left: 10px; opacity: 0.1; pointer-events: none; z-index: 1; font-size: 3rem; color: #2b6ca3;">
+        <i class="fas fa-cube"></i>
     </div>
 </body>
 </html>

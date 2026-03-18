@@ -36,8 +36,8 @@ if($enrollment) {
     exit;
 }
 
-// Enroll the user
-$stmt = $pdo->prepare("INSERT INTO enrollments (user_id, course_id, enrolled_at, status, progress, total_time_seconds) VALUES (?, ?, NOW(), 'ongoing', 0, 0)");
+// Enroll the user - REMOVED total_time_seconds
+$stmt = $pdo->prepare("INSERT INTO enrollments (user_id, course_id, enrolled_at, status, progress) VALUES (?, ?, NOW(), 'ongoing', 0)");
 $stmt->execute([$userId, $courseId]);
 
 $_SESSION['message'] = "Successfully enrolled in '{$course['title']}'";

@@ -161,295 +161,297 @@ $timeLeft = 600;
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ARMMC LMS · Register</title>
-    <link href="<?= BASE_URL ?>/assets/css/register.css" rel="stylesheet">
+    <title>CookLabs LMS · Register</title>
+    <link rel="icon" type="image/png" href="../uploads/images/cooklabs-mini-logo.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <!-- Google Fonts: Inter (geometric friendly) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../assets/css/register.css">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        }
-
-        body {
-            background-image: url('../uploads/images/armmc-bg.png');
-            background-size: cover;
-            background-position: center;
-            min-height: 100vh;
+        /* Additional style to show paste is disabled */
+        .no-paste-notice {
+            font-size: 11px;
+            color: #6c757d;
+            margin-top: 4px;
+            margin-left: 1rem;
             display: flex;
             align-items: center;
-            justify-content: center;
-            padding: 1.5rem;
+            gap: 4px;
+        }
+        .no-paste-notice i {
+            font-size: 10px;
+            color: #dc3545;
         }
         
-        .overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 35, 102, 0.4);
-            z-index: -1;
+        /* Back icon style */
+        .back-icon {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            font-size: 1.5rem;
+            color: #1661a3;
+            cursor: pointer;
+            transition: all 0.1s ease;
+            z-index: 10;
+        }
+        
+        .back-icon:hover {
+            color: #1a70b5;
+            transform: translateX(-2px);
+        }
+        
+        /* Make register card position relative for absolute positioning */
+        .register-card {
+            position: relative;
         }
     </style>
 </head>
-<body>
-    <div class="overlay"></div>
-    <div class="register-card">
-        <div class="grid-layout">
-            <!-- LEFT SIDE: COMPANY LOGO (identical) -->
-            <div class="logo-hero">
-                <div class="logo-main">
-                    <img 
-                        class="company-logo-png" 
-                        src="../uploads/images/armmc-logo.png" 
-                        alt="ARMMC Logo"
-                        title="Amang Rodriguez Memorial Medical Center"
-                    >
-                    <div class="logo-caption">
-                        <i class="fas fa-circle" style="font-size: 0.4rem; vertical-align: middle; color: #1f6fb0;"></i> 
-                        AMANG RODRIGUEZ MEMORIAL MEDICAL CENTER 
-                        <i class="fas fa-circle" style="font-size: 0.4rem; vertical-align: middle; color: #1f6fb0;"></i>
+<body style="background: url('../uploads/images/cooklabs-bg.png') no-repeat center center fixed; background-size: cover;">
+    <div class="register-wrapper">
+        <div class="register-card">
+            <!-- Back icon -->
+            <a href="index.php" class="back-icon">
+                <i class="fas fa-arrow-left"></i>
+            </a>
+            
+            <!-- Logo above form (identical to login) -->
+            <div class="logo-top">
+                <div class="logo-sharp">
+                    <img src="../uploads/images/cooklabs-logo.png" alt="Cooklabs Logo" title="Cooklabs Learning Management System">
+                </div>
+            </div>
+
+            <!-- Form Header -->
+            <div class="form-sub">
+            Fill in your details to get started
+            </div>
+
+            <!-- Error/Success Messages -->
+            <?php if($err): ?>
+            <div class="alert alert-danger">
+                <i class="fas fa-exclamation-circle"></i>
+                <span><?= htmlspecialchars($err) ?></span>
+            </div>
+            <?php endif; ?>
+
+            <?php if($success && !$showOTP): ?>
+            <div class="alert alert-success">
+                <i class="fas fa-check-circle"></i>
+                <?= $success ?>
+            </div>
+            <?php endif; ?>
+
+            <!-- Registration Form -->
+            <form action="../public/register.php" method="POST" id="registerForm">
+                <?php if(!$showOTP): ?>
+                <!-- First Name & Last Name Row -->
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="fname" class="form-label">First Name</label>
+                        <div class="input-wrapper">
+                            <i class="fas fa-user input-icon"></i>
+                            <input 
+                                type="text" 
+                                id="fname" 
+                                name="fname" 
+                                class="form-input" 
+                                placeholder="John"
+                                value="<?= isset($_POST['fname']) ? htmlspecialchars($_POST['fname']) : '' ?>"
+                                required
+                            >
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="lname" class="form-label">Last Name</label>
+                        <div class="input-wrapper">
+                            <i class="fas fa-user input-icon"></i>
+                            <input 
+                                type="text" 
+                                id="lname" 
+                                name="lname" 
+                                class="form-input" 
+                                placeholder="Doe"
+                                value="<?= isset($_POST['lname']) ? htmlspecialchars($_POST['lname']) : '' ?>"
+                                required
+                            >
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- RIGHT SIDE: REGISTRATION FORM -->
-            <div class="register-container">
-                <h2 class="register-header">
-                    join our <span>LMS</span>
-                </h2>
-                <p class="register-subtitle">
-                    Fill in your details to get started
-                </p>
-
-                <?php if($err): ?>
-                <div class="alert alert-danger">
-                    <i class="fas fa-exclamation-circle"></i>
-                    <?= htmlspecialchars($err) ?>
+                <!-- Email Address -->    
+                <div class="form-group">
+                    <label for="email" class="form-label">Email Address</label>
+                    <div class="input-wrapper">
+                        <i class="fas fa-envelope input-icon"></i>
+                        <input 
+                            type="email" 
+                            id="email" 
+                            name="email" 
+                            class="form-input" 
+                            placeholder="john.doe@mail.com"
+                            value="<?= isset($_POST['email']) ? htmlspecialchars($_POST['email']) : '' ?>"
+                            required
+                        >
+                    </div>
                 </div>
-                <?php endif; ?>
-
-                <?php if($success && !$showOTP): ?>
-                <div class="alert alert-success">
-                    <i class="fas fa-check-circle"></i>
-                    <?= $success ?>
+               
+                <!-- Username -->
+                <div class="form-group">
+                    <label for="username" class="form-label">Username</label>
+                    <div class="input-wrapper">
+                        <i class="fas fa-at input-icon"></i>
+                        <input 
+                            type="text" 
+                            id="username" 
+                            name="username" 
+                            class="form-input" 
+                            placeholder="johndoe123"
+                            value="<?= isset($_POST['username']) ? htmlspecialchars($_POST['username']) : '' ?>"
+                            required
+                        >
+                    </div>
                 </div>
-                <?php endif; ?>
 
-                <!-- Registration Form -->
-                <div class="register-form-wrapper">
-                    <form action="../public/register.php" method="POST" id="registerForm">
-                        <?php if(!$showOTP): ?>
-                        <!-- First Name & Last Name Row -->
-                        <div class="register-name-row">
-                            <div class="register-form-group">
-                                <label for="fname" class="register-form-label">First Name</label>
-                                <div class="register-input-container">
-                                    <i class="fas fa-user register-input-icon"></i>
-                                    <input 
-                                        type="text" 
-                                        id="fname" 
-                                        name="fname" 
-                                        class="register-form-input" 
-                                        placeholder="John"
-                                        value="<?= isset($_POST['fname']) ? htmlspecialchars($_POST['fname']) : '' ?>"
-                                        required
-                                    >
-                                </div>
-                            </div>
-
-                            <div class="register-form-group">
-                                <label for="lname" class="register-form-label">Last Name</label>
-                                <div class="register-input-container">
-                                    <i class="fas fa-user register-input-icon"></i>
-                                    <input 
-                                        type="text" 
-                                        id="lname" 
-                                        name="lname" 
-                                        class="register-form-input" 
-                                        placeholder="Doe"
-                                        value="<?= isset($_POST['lname']) ? htmlspecialchars($_POST['lname']) : '' ?>"
-                                        required
-                                    >
-                                </div>
-                            </div>
+                <!-- Password Row -->
+                <div class="form-row">    
+                    <div class="form-group">
+                        <label for="password" class="form-label">Password</label>
+                        <div class="input-wrapper">
+                            <i class="fas fa-lock input-icon"></i>
+                            <input 
+                                type="password" 
+                                id="password" 
+                                name="password" 
+                                class="form-input no-paste" 
+                                placeholder="Use strong password"
+                                required
+                                onkeyup="checkPasswordStrength()"
+                                onpaste="return false;"
+                                oncontextmenu="return false;"
+                                oncopy="return false;"
+                                oncut="return false;"
+                                ondrop="return false;"
+                            >
+                            <button type="button" class="toggle-password" onclick="togglePasswordVisibility('password', 'togglePasswordIcon')">
+                                <i class="fas fa-eye" id="togglePasswordIcon"></i>
+                            </button>
                         </div>
-
-                        <!-- Email Address -->    
-                        <div class="register-form-group">
-                            <label for="email" class="register-form-label">Email Address</label>
-                            <div class="register-input-container">
-                                <i class="fas fa-envelope register-input-icon"></i>
-                                <input 
-                                    type="email" 
-                                    id="email" 
-                                    name="email" 
-                                    class="register-form-input" 
-                                    placeholder="john.doe@armmc.gov.ph"
-                                    value="<?= isset($_POST['email']) ? htmlspecialchars($_POST['email']) : '' ?>"
-                                    required
-                                >
+                        <small class="password-hint">Minimum 8 characters recommended</small>
+                        <div class="password-strength">
+                            <span>Strength:</span>
+                            <div class="strength-bar">
+                                <div class="strength-fill" id="strengthBar"></div>
                             </div>
+                            <span id="strengthText">Weak</span>
                         </div>
-                       
-                        <!-- Username -->
-                        <div class="register-form-group">
-                            <label for="username" class="register-form-label">Username</label>
-                            <div class="register-input-container">
-                                <i class="fas fa-at register-input-icon"></i>
-                                <input 
-                                    type="text" 
-                                    id="username" 
-                                    name="username" 
-                                    class="register-form-input" 
-                                    placeholder="johndoe123"
-                                    value="<?= isset($_POST['username']) ? htmlspecialchars($_POST['username']) : '' ?>"
-                                    required
-                                >
-                            </div>
+                    </div>
+
+                    <!-- Confirm Password -->
+                    <div class="form-group">
+                        <label for="confirm_password" class="form-label">Confirm Password</label>
+                        <div class="input-wrapper">
+                            <i class="fas fa-lock input-icon"></i>
+                            <input 
+                                type="password" 
+                                id="confirm_password" 
+                                name="confirm_password" 
+                                class="form-input no-paste" 
+                                placeholder="Re-enter password"
+                                required
+                                onkeyup="validatePasswordMatch()"
+                                onpaste="return false;"
+                                oncontextmenu="return false;"
+                                oncopy="return false;"
+                                oncut="return false;"
+                                ondrop="return false;"
+                            >
+                            <button type="button" class="toggle-password" onclick="togglePasswordVisibility('confirm_password', 'toggleConfirmIcon')">
+                                <i class="fas fa-eye" id="toggleConfirmIcon"></i>
+                            </button>
                         </div>
+                        <small id="passwordMatchMessage" style="color: #dc3545; font-size: 0.75rem; margin-left: 1rem;"></small>
+                    </div>
+                </div>
 
-                        <!-- Password -->
-                        <div class="register-name-row">    
-                            <div class="register-form-group">
-                                <label for="password" class="register-form-label">Password</label>
-                                <div class="register-input-container">
-                                    <i class="fas fa-lock register-input-icon"></i>
-                                    <input 
-                                        type="password" 
-                                        id="password" 
-                                        name="password" 
-                                        class="register-form-input" 
-                                        placeholder="Use strong password"
-                                        required
-                                        onkeyup="checkPasswordStrength()"
-                                    >
-                                    <button type="button" class="register-password-toggle" onclick="togglePasswordVisibility('password', 'togglePasswordIcon')">
-                                        <i class="fas fa-eye" id="togglePasswordIcon"></i>
-                                    </button>
-                                </div>
-                                <small class="password-hint">Minimum 8 characters recommended</small>
-                                <div class="register-password-strength">
-                                    <span>Strength:</span>
-                                    <div class="register-strength-bar">
-                                        <div class="register-strength-fill" id="strengthBar"></div>
-                                    </div>
-                                    <span id="strengthText">Weak</span>
-                                </div>
-                            </div>
+                <!-- Register Button -->
+                <button type="submit" class="register-btn">
+                    <i class="fas fa-user-plus"></i> Create Account
+                </button>
 
-                            <!-- Confirm Password -->
-                            <div class="register-form-group">
-                                <label for="confirm_password" class="register-form-label">Confirm Password</label>
-                                <div class="register-input-container">
-                                    <i class="fas fa-lock register-input-icon"></i>
-                                    <input 
-                                        type="password" 
-                                        id="confirm_password" 
-                                        name="confirm_password" 
-                                        class="register-form-input" 
-                                        placeholder="Re-enter password"
-                                        required
-                                        onkeyup="validatePasswordMatch()"
-                                    >
-                                    <button type="button" class="register-password-toggle" onclick="togglePasswordVisibility('confirm_password', 'toggleConfirmIcon')">
-                                        <i class="fas fa-eye" id="toggleConfirmIcon"></i>
-                                    </button>
-                                </div>
-                                <small id="passwordMatchMessage" style="color: #dc3545; font-size: 0.8rem; margin-left: 1rem;"></small>
-                            </div>
+                <!-- Sign In Link -->
+                <div class="signin-prompt">
+                    Already have an account? 
+                    <a href="../public/login.php" class="signin-link">Sign in now</a>
+                </div>
+
+                <?php else: ?>
+                <!-- OTP Verification Section -->
+                <div class="otp-section">
+                    <?php if($success): ?>
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle"></i>
+                            <?= $success ?>
                         </div>
-
-                        <!-- Register Button -->
-                        <button type="submit" class="register-btn-primary">
-                            <i class="fas fa-user-plus"></i> Create Account
+                    <?php endif; ?>
+                    
+                    <h3 style="text-align: center; margin-bottom: 20px;">
+                        <i class="fas fa-shield-alt"></i> Verify Your Email
+                    </h3>
+                    
+                    <p style="text-align: center; margin-bottom: 20px;">
+                        Enter the 6-digit OTP sent to:<br>
+                        <strong><?= htmlspecialchars($_SESSION['registration_data']['email'] ?? '') ?></strong>
+                    </p>
+                    
+                    <div class="otp-input-container">
+                        <input type="text" id="security_code" name="security_code" class="otp-input" 
+                                placeholder="000000" maxlength="6" pattern="\d{6}" required 
+                                autocomplete="off" inputmode="numeric">
+                        <input type="hidden" name="otp_verify" value="1">
+                    </div>
+                    
+                    <div class="timer-display" id="otpTimer">
+                        <?php
+                        if ($timeLeft <= 0) {
+                            echo '<span class="timer-expired">OTP has expired</span>';
+                        } else {
+                            $minutes = floor($timeLeft / 60);
+                            $seconds = $timeLeft % 60;
+                            echo "OTP expires in: <span id='timeLeft'>" . sprintf('%02d:%02d', $minutes, $seconds) . "</span>";
+                        }
+                        ?>
+                    </div>
+                    
+                    <div style="text-align: center; margin: 15px 0;">
+                        <button type="button" class="resend-code-btn" id="resendCodeBtn" 
+                                onclick="resendOTP()" <?= $timeLeft > 0 ? 'disabled' : '' ?>>
+                            <i class="fas fa-redo"></i> Resend OTP
                         </button>
-
-                        <!-- Sign In Link -->
-                        <div class="register-signin-prompt">
-                            Already have an account? 
-                            <a href="../public/login.php" class="register-signin-link">Sign in now</a>
-                        </div>
-
-                        <?php else: ?>
-                        <!-- OTP Verification Section -->
-                        <div class="otp-section">
-                            <?php if($success): ?>
-                                <div class="alert alert-info">
-                                    <i class="fas fa-info-circle"></i>
-                                    <?= $success ?>
-                                </div>
-                            <?php endif; ?>
-                            
-                            <h3 style="text-align: center; margin-bottom: 20px;">
-                                <i class="fas fa-shield-alt"></i> Verify Your Email
-                            </h3>
-                            
-                            <p style="text-align: center; margin-bottom: 20px;">
-                                Enter the 6-digit OTP sent to:<br>
-                                <strong><?= htmlspecialchars($_SESSION['registration_data']['email'] ?? '') ?></strong>
-                            </p>
-                            
-                            <div class="otp-input-container">
-                                <input type="text" id="security_code" name="security_code" class="otp-input" 
-                                        placeholder="000000" maxlength="6" pattern="\d{6}" required 
-                                        autocomplete="off" inputmode="numeric">
-                                <input type="hidden" name="otp_verify" value="1">
-                            </div>
-                            
-                            <div class="timer-display" id="otpTimer">
-                                <?php
-                                if ($timeLeft <= 0) {
-                                    echo '<span class="timer-expired">OTP has expired</span>';
-                                } else {
-                                    $minutes = floor($timeLeft / 60);
-                                    $seconds = $timeLeft % 60;
-                                    echo "OTP expires in: <span id='timeLeft'>" . sprintf('%02d:%02d', $minutes, $seconds) . "</span>";
-                                }
-                                ?>
-                            </div>
-                            
-                            <div style="text-align: center; margin: 15px 0;">
-                                <button type="button" class="resend-code-btn" id="resendCodeBtn" 
-                                        onclick="resendOTP()" <?= $timeLeft > 0 ? 'disabled' : '' ?>>
-                                    <i class="fas fa-redo"></i> Resend OTP
-                                </button>
-                                <span id="resendTimer" style="font-size: 12px; color: #666; margin-left: 10px;"></span>
-                            </div>
-                            
-                            <div class="form-actions">
-                                <button type="submit" class="register-btn-primary btn-verify">
-                                    <i class="fas fa-check"></i> Verify & Register
-                                </button>
-                                <button type="button" class="register-btn-primary btn-cancel" onclick="window.location.href='register.php'">
-                                    <i class="fas fa-times"></i> Cancel
-                                </button>
-                            </div>
-                            
-                            <div style="text-align: center; margin-top: 15px; font-size: 12px; color: #666;">
-                                <i class="fas fa-info-circle"></i> Didn't receive the code? Check your spam folder.
-                            </div>
-                        </div>
-                        <?php endif; ?>
-                    </form>
+                        <span id="resendTimer" style="font-size: 12px; color: #666; margin-left: 10px;"></span>
+                    </div>
+                    
+                    <div class="form-actions">
+                        <button type="submit" class="register-btn btn-verify">
+                            <i class="fas fa-check"></i> Verify & Register
+                        </button>
+                        <button type="button" class="register-btn btn-cancel" onclick="window.location.href='register.php'">
+                            <i class="fas fa-times"></i> Cancel
+                        </button>
+                    </div>
+                    
+                    <div style="text-align: center; margin-top: 15px; font-size: 12px; color: #666;">
+                        <i class="fas fa-info-circle"></i> Didn't receive the code? Check your spam folder.
+                    </div>
                 </div>
-
-                <!-- Bottom note -->
-                <div class="register-bottom-note">
-                    <span class="line"></span>
-                    <span>ARMMC Learning Management System. All rights reserved 2026.</span>
-                    <span class="line"></span>
-                </div>
-                <div class="register-bottom-note" style="margin-top: 0.5rem; margin-left: 250px;">
-                    iMISS
-                </div>
-            </div>
+                <?php endif; ?>
+            </form>
         </div>
     </div>
 
-    <!-- JavaScript for interactive features -->
+    <!-- JavaScript (identical functionality, untouched) -->
     <script>
         // Toggle password visibility
         function togglePasswordVisibility(inputId, iconId) {
@@ -467,30 +469,6 @@ $timeLeft = 600;
             }
         }
 
-        // Password toggle for main password field
-        const togglePassword = document.getElementById('togglePassword');
-        if (togglePassword) {
-            togglePassword.addEventListener('click', function() {
-                const passwordInput = document.getElementById('password');
-                const icon = this.querySelector('i');
-                
-                if (passwordInput.type === 'password') {
-                    passwordInput.type = 'text';
-                    icon.classList.remove('fa-eye');
-                    icon.classList.add('fa-eye-slash');
-                } else {
-                    passwordInput.type = 'password';
-                    icon.classList.remove('fa-eye-slash');
-                    icon.classList.add('fa-eye');
-                }
-            });
-        }
-
-
-
-        // Initialize count on page load
-        updateSelectedCount();
-
         // Check password strength
         function checkPasswordStrength() {
             const password = document.getElementById('password').value;
@@ -505,7 +483,6 @@ $timeLeft = 600;
             if (password.match(/[0-9]+/)) strength += 25;
             if (password.match(/[$@#&!]+/)) strength += 25;
             
-            // Cap at 100%
             strength = Math.min(strength, 100);
             
             strengthBar.style.width = strength + '%';
@@ -625,6 +602,35 @@ $timeLeft = 600;
             });
         }
 
+        // Additional protection against paste for password fields
+        document.querySelectorAll('.no-paste').forEach(input => {
+            input.addEventListener('paste', (e) => {
+                e.preventDefault();
+                // Optional: Show a small notification
+                const notification = document.createElement('div');
+                notification.className = 'no-paste-notice flash-notice';
+                notification.innerHTML = '<i class="fas fa-ban"></i> Pasting is disabled for password fields';
+                notification.style.color = '#dc3545';
+                notification.style.fontSize = '11px';
+                notification.style.marginTop = '2px';
+                
+                // Remove any existing notification
+                const existing = input.closest('.form-group').querySelector('.flash-notice');
+                if (existing) existing.remove();
+                
+                input.closest('.form-group').appendChild(notification);
+                
+                // Fade out and remove
+                setTimeout(() => {
+                    if (notification) {
+                        notification.style.transition = 'opacity 0.5s';
+                        notification.style.opacity = '0';
+                        setTimeout(() => notification.remove(), 500);
+                    }
+                }, 2000);
+            });
+        });
+
         function resendOTP() {
             if (!canResend) return;
             if (confirm('Resend OTP to your email?')) {
@@ -697,14 +703,12 @@ $timeLeft = 600;
         }
 
         // Input animations
-        const inputs = document.querySelectorAll('.register-form-input, .otp-input, .checkbox-item');
+        const inputs = document.querySelectorAll('.form-input, .otp-input');
         inputs.forEach(input => {
             input.addEventListener('focus', function() {
-                if (this.classList.contains('checkbox-item')) return;
                 this.parentElement.style.transform = 'scale(1.02)';
             });
             input.addEventListener('blur', function() {
-                if (this.classList.contains('checkbox-item')) return;
                 this.parentElement.style.transform = 'scale(1)';
             });
         });

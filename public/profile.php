@@ -47,26 +47,26 @@ foreach ($courses as $c) {
 function get_role_display_name($role) {
     $roles = [
         'superadmin' => 'SuperAdmin',
-        'admin' => 'Administrator',
-        'proponent' => 'Proponent',
+        'admin' => 'Admin',
+        'proponent' => 'Instructor',
         'user' => 'Student',
     ];
     return $roles[$role] ?? ucfirst($role);
 }
-
-$stmt=$pdo->prepare("SELECT d.name FROM departments d
-    JOIN user_departments ud ON ud.department_id = d.id
-    WHERE ud.user_id = ?");
 ?>
 <!doctype html>
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>My Profile - LMS</title>
+    <title>My Profile - CookLabs LMS</title>
+    <link rel="icon" type="image/png" href="../uploads/images/cooklabs-mini-logo.png">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="<?= BASE_URL ?>/assets/css/profile.css" rel="stylesheet">
-    <link href="<?= BASE_URL ?>/assets/css/course.css" rel="stylesheet">
+    <!-- Google Fonts: Inter (geometric) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/profile.css">
 </head>
 <body>
 
@@ -93,8 +93,8 @@ $stmt=$pdo->prepare("SELECT d.name FROM departments d
     </div>
 
     <div class="profile-card">
-        <!-- Avatar -->
-         <div class="profile-avatar <?= strtolower(trim($u['role'] ?? 'guest')) ?>">
+        <!-- Avatar - CIRCLE with role-based color -->
+        <div class="profile-avatar <?= strtolower(trim($u['role'] ?? 'user')) ?>">
             <?php
             $initials = 'U';
             if(isset($u['fname']) && !empty($u['fname'])) {
@@ -114,15 +114,18 @@ $stmt=$pdo->prepare("SELECT d.name FROM departments d
         <!-- Basic Info -->
         <div class="user-info">
             <h2 class="user-name"><?= htmlspecialchars($u['fname'] . ' ' . ($u['lname'] ?? '')) ?></h2>
-            <div class="user-role <?= $u['role'] ?? 'guest' ?>">
+            
+            <!-- Role badge - NO EDGES with role-based color -->
+            <div class="user-role <?= strtolower(trim($u['role'] ?? 'user')) ?>">
                 <?= htmlspecialchars(get_role_display_name($u['role'] ?? '')) ?>
             </div>
+            
             <p class="user-email">
-                <i class="fas fa-envelope me-2"></i>
+                <i class="fas fa-envelope"></i>
                 <?= htmlspecialchars($u['email'] ?? 'No email provided') ?>
             </p>
             <p class="member-since">
-                <i class="fas fa-calendar-alt me-2"></i>
+                <i class="fas fa-calendar-alt"></i>
                 Member since: 
                 <?php 
                 if($createdAt && !empty($createdAt)) {
@@ -131,47 +134,22 @@ $stmt=$pdo->prepare("SELECT d.name FROM departments d
                     echo 'Unknown';
                 }
                 ?>
-
-                <p>Departments:</p>
-                <ul>
-                    <?php
-                    $stmt->execute([$u['id']]);
-                    $departments = $stmt->fetchAll(PDO::FETCH_ASSOC);
-                    if ($departments) {
-                        foreach ($departments as $dept) {
-                            echo '<TH> <BR>' . htmlspecialchars($dept['name']) . '</TH>';
-                        }
-                    } else {
-                        echo '<li>No departments assigned</li>';
-                    }
-                    ?>
-
-
             </p>
         </div>
 
-        <!-- Stats Grid -->
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-number"><?= $counter['ongoing'] ?></div>
-                <div class="stat-label">Ongoing Courses</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number"><?= $counter['completed'] ?></div>
-                <div class="stat-label">Completed</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number"><?= $counter['not_enrolled'] ?></div>
-                <div class="stat-label">Available Courses</div>
-            </div>
-        </div>
+        <!-- STATS CARDS REMOVED -->
 
-        <!-- Actions -->
-        <div class="text-center">
-            <a href="<?= BASE_URL ?>/public/edit_profile.php" class="modern-btn-warning modern-btn-sm">  
-                <i class="fas fa-edit"></i> Edit Profile
-            </a>
-        </div>
+        <!-- Edit Profile Button -->
+        <a href="<?= BASE_URL ?>/public/edit_profile.php" class="modern-btn-warning">  
+            <i class="fas fa-edit"></i> Edit Profile
+        </a>
+    </div>
+
+    <!-- Kitchen accent line -->
+    <div class="kitchen-accent">
+        <i class="fas fa-cube"></i>
+        <i class="fas fa-utensils"></i>
+        <i class="fas fa-cube"></i>
     </div>
 </div>
 

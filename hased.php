@@ -1,6 +1,6 @@
 <?php
 
-echo password_hash('user', PASSWORD_DEFAULT);
+echo password_hash('admin', PASSWORD_DEFAULT);
 
 
 

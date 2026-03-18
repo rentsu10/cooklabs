@@ -3,7 +3,7 @@ session_start();
 
 // Database connection
 $host = 'localhost';
-$db   = 'lms_db';
+$db   = 'cooklabs_db';
 $user = 'root';
 $pass = '';
 $charset = 'utf8mb4';
@@ -22,7 +22,7 @@ try {
 // Dynamically define BASE_URL
 $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' 
             || $_SERVER['SERVER_PORT'] == 443) ? "https://" : "http://";
-define('BASE_URL', $protocol . $_SERVER['HTTP_HOST'] . '/lms');
+define('BASE_URL', $protocol . $_SERVER['HTTP_HOST'] . '/cooklabs');
 
 // Include functions
 require_once __DIR__ . '/functions.php';
@@ -52,7 +52,7 @@ define('SMTP_PORT', 587);
 define('SMTP_USERNAME', 'learningmanagement576@gmail.com');
 define('SMTP_PASSWORD', 'ahkv dpsl urcn lbmr');
 define('SMTP_FROM_EMAIL', 'learningmanagement576@gmail.com');
-define('SMTP_FROM_NAME', 'LMS');
+define('SMTP_FROM_NAME', 'CookLabs');
 
 
 

@@ -61,11 +61,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Edit Profile</title>
+    <title>Edit Profile - CookLabs LMS</title>
+    <link rel="icon" type="image/png" href="../uploads/images/cooklabs-mini-logo.png">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="<?= BASE_URL ?>/assets/css/editprofile.css" rel="stylesheet">
-    <link href="<?= BASE_URL ?>/assets/css/profile.css" rel="stylesheet">
+    <!-- Google Fonts: Inter (geometric) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/editprofile.css">
 </head>
 <body>
     <div class="lms-sidebar-container">
@@ -100,18 +104,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <div class="mb-3">
                 <label for="password" class="form-label">Password</label>
                 <input type="password" name="password" id="password" class="form-control">
-                <div class="password-note">Leave blank if unchanged</div>
+                <div class="password-note">Leave password blank if no changes are needed</div>
             </div>
 
             <div class="button-container">
-                <button type="submit" class="btn btn-primary">
-                    <i class="fas fa-save me-2"></i>Save Changes
+                <button type="submit" class="btn-primary">
+                    <i class="fas fa-save"></i>Save Changes
                 </button>
-                <a href="profile.php" class="btn btn-secondary">
-                    <i class="fas fa-times me-2"></i>Cancel
+                <a href="profile.php" class="btn-secondary">
+                    <i class="fas fa-times"></i>Cancel
                 </a>
             </div>
         </form>
+
+        <!-- Kitchen accent line -->
+        <div class="kitchen-accent">
+            <i class="fas fa-cube"></i>
+            <i class="fas fa-utensils"></i>
+            <i class="fas fa-cube"></i>
+        </div>
     </div>
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>

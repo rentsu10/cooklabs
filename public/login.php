@@ -19,7 +19,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Check if user is confirmed
         if (isset($user['status']) && $user['status'] !== 'confirmed') {
             if ($user['status'] === 'pending') {
-                $pending_contact = 'Your account is pending approval. Please contact administrator.';
+                $pending_contact = 'Your account is pending approval. Please ask Instructor/Admin for assistance.';
             } else {
                 $error = 'Please confirm your email before logging in.';
             }
@@ -59,165 +59,170 @@ $admin_email = $admin['email'];
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ARMMC LMS · Login</title>
-    <link href="<?= BASE_URL ?>/assets/css/login.css" rel="stylesheet">
+    <title>CookLabs LMS · Login</title>
+    <link rel="icon" type="image/png" href="../uploads/images/cooklabs-mini-logo.png">
+    <link rel="stylesheet" href="../assets/css/login.css">
+    <link rel="icon" type="image/png" href="/path/to/your/favicon.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-</head>
-<style>
- * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        }
-
-        body {
-            background-image: url('../uploads/images/armmc-bg.png');
-            background-size: cover;
-            background-position: center;
-            min-height: 100vh;
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
+    <style>
+        /* Additional style to show paste is disabled */
+        .no-paste-notice {
+            font-size: 11px;
+            color: #6c757d;
+            margin-top: 4px;
+            margin-left: 1rem;
             display: flex;
             align-items: center;
-            justify-content: center;
-            padding: 1.5rem;
+            gap: 4px;
+        }
+        .no-paste-notice i {
+            font-size: 10px;
+            color: #dc3545;
+        }
+        .flash-notice {
+            animation: fadeOut 2s forwards;
+        }
+        @keyframes fadeOut {
+            0% { opacity: 1; }
+            70% { opacity: 1; }
+            100% { opacity: 0; display: none; }
         }
         
-        .overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 35, 102, 0.4);
-            z-index: -1;
+        /* Back icon style */
+        .back-icon {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            font-size: 1.5rem;
+            color: #1661a3;
+            cursor: pointer;
+            transition: all 0.1s ease;
+            z-index: 10;
         }
-
-</style>
-<body>
-    <div class="overlay"></div>
-    <div class="login-card">
-        <div class="grid-layout">
-            <!-- LEFT SIDE: COMPANY LOGO (identical to welcome page) -->
-            <div class="logo-hero">
-                <div class="logo-main">
-                    <img 
-                        class="company-logo-png" 
-                        src="../uploads/images/armmc-logo.png" 
-                        alt="ARMMC Logo"
-                        title="Amang Rodriguez Memorial Medical Center"
-                    >
-                    <div class="logo-caption">
-                        <i class="fas fa-circle" style="font-size: 0.4rem; vertical-align: middle; color: #1f6fb0;"></i> 
-                        AMANG RODRIGUEZ MEMORIAL MEDICAL CENTER 
-                        <i class="fas fa-circle" style="font-size: 0.4rem; vertical-align: middle; color: #1f6fb0;"></i>
-                    </div>
+        
+        .back-icon:hover {
+            color: #1a70b5;
+            transform: translateX(-2px);
+        }
+        
+        /* Make login card position relative for absolute positioning */
+        .login-card {
+            position: relative;
+        }
+    </style>
+</head>
+<body style="background: url('../uploads/images/cooklabs-bg.png') no-repeat center center fixed; background-size: cover;">
+    <div class="login-wrapper">
+        <div class="login-card">
+            <!-- Back icon -->
+            <a href="index.php" class="back-icon">
+                <i class="fas fa-arrow-left"></i>
+            </a>
+            
+            <!-- Logo above form -->
+            <div class="logo-top">
+                <div class="logo-sharp">
+                    <img src="../uploads/images/cooklabs-logo.png" alt="Cooklabs Logo" title="Cooklabs Learning Management System">
                 </div>
             </div>
 
-            <!-- RIGHT SIDE: LOGIN FORM -->
-            <div class="login-container">  
-                <h1 class="login-header">
-                    access your <span>account</span>
-                </h1>
-                <p class="login-subtitle">
-                    Please enter your credentials to continue
-                </p>
+            <!-- Form Header -->
 
-                <!-- Pending Notification -->
-                <?php if (!empty($pending_contact)): ?>
-                <div class="pending-note">
-                    <i class="fas fa-clock"></i>
-                    <div class="pending-note-content">
-                        <div class="pending-note-title">Account pending approval</div>
-                        <div class="pending-note-text"><?= htmlspecialchars($pending_contact) ?></div>
+            <div class="form-sub">
+                Enter your credentials
+            </div>
+
+            <!-- Pending Notification -->
+            <?php if (!empty($pending_contact)): ?>
+            <div class="message-block pending-note">
+                <i class="fas fa-clock"></i>
+                <div>
+                    <div style="font-weight:700;">Account pending approval</div>
+                    <div><?= htmlspecialchars($pending_contact) ?></div>
+                </div>
+            </div>
+            <?php endif; ?>
+            
+            <!-- Error Message -->
+            <?php if(!empty($error)): ?>
+            <div class="message-block error-message">
+                <i class="fas fa-exclamation-circle"></i>
+                <span><?= htmlspecialchars($error) ?></span>
+            </div>
+            <?php endif; ?>
+
+            <!-- Login Form -->
+            <form method="POST" action="" id="loginForm">
+                <!-- Username/Email -->
+                <div class="form-group">
+                    <label for="username" class="form-label">Username or Email</label>
+                    <div class="input-wrapper">
+                        <i class="fas fa-user input-icon"></i>
+                        <input 
+                            type="text" 
+                            id="username" 
+                            name="username" 
+                            class="form-input" 
+                            placeholder="your username"
+                            value="<?= isset($_POST['username']) ? htmlspecialchars($_POST['username']) : '' ?>"
+                            required
+                        >
                     </div>
                 </div>
-                <?php endif; ?>
-                
-                <!-- Error Message -->
-                <?php if(!empty($error)): ?>
-                <div class="error-message">
-                    <i class="fas fa-exclamation-circle"></i>
-                    <span><?= htmlspecialchars($error) ?></span>
-                </div>
-                <?php endif; ?>
 
-                <!-- Login Form -->
-                <div class="login-form-wrapper">
-                    <form class="login-form" method="POST" action="" id="loginForm">
-                        <!-- Username/Email field -->
-                        <div class="login-form-group">
-                            <label for="username" class="login-form-label">Username or Email</label>
-                            <div class="login-input-container">
-                                <i class="fas fa-user login-input-icon"></i>
-                                <input 
-                                    type="text" 
-                                    id="username" 
-                                    name="username" 
-                                    class="login-form-input" 
-                                    placeholder="Enter your username"
-                                    value="<?= isset($_POST['username']) ? htmlspecialchars($_POST['username']) : '' ?>"
-                                    required
-                                >
-                            </div>
-                        </div>
-
-                        <!-- Password field -->
-                        <div class="login-form-group">
-                            <label for="password" class="login-form-label">Password</label>
-                            <div class="login-input-container">
-                                <i class="fas fa-lock login-input-icon"></i>
-                                <input 
-                                    type="password" 
-                                    id="password" 
-                                    name="password" 
-                                    class="login-form-input" 
-                                    placeholder="Enter your password"
-                                    required
-                                >
-                                <button type="button" class="login-password-toggle" id="togglePassword">
-                                    <i class="fas fa-eye" id="togglePasswordIcon"></i>
-                                </button>
-                            </div>
-                        </div>
-
-                        <!-- Remember me & Forgot password -->
-                        <div class="login-options-row">
-                            <label class="login-remember">
-                                <input type="checkbox" name="remember" id="remember"> Remember me
-                            </label>
-                            <a href="forgot_password.php" class="login-forgot-link">Forgot password?</a>
-                        </div>
-
-                        <!-- Login button -->
-                        <button type="submit" class="login-btn-primary">
-                            <i class="fas fa-sign-in-alt"></i> Sign In
+                <!-- Password -->
+                <div class="form-group">
+                    <label for="password" class="form-label">Password</label>
+                    <div class="input-wrapper">
+                        <i class="fas fa-lock input-icon"></i>
+                        <input 
+                            type="password" 
+                            id="password" 
+                            name="password" 
+                            class="form-input no-paste" 
+                            placeholder="••••••••"
+                            required
+                            onpaste="return false;"
+                            oncontextmenu="return false;"
+                            oncopy="return false;"
+                            oncut="return false;"
+                            ondrop="return false;"
+                        >
+                        <button type="button" class="toggle-password" id="togglePassword">
+                            <i class="fas fa-eye" id="togglePasswordIcon"></i>
                         </button>
-
-                        <!-- Sign up link -->
-                        <div class="login-signup-prompt">
-                            Don't have an account? 
-                            <a href="<?= BASE_URL ?>/public/register.php" class="login-signup-link">Sign up now</a>
-                        </div>
-                    </form>
+                    </div>
                 </div>
 
-                <!-- Bottom note -->
-                <div class="login-bottom-note">
-                    <span class="line"></span>
-                    <span>ARMMC Learning Management System. All rights reserved 2026.</span>
-                    <span class="line"></span>
+                <!-- Remember me & Forgot password -->
+                <div class="options-row">
+                    <label class="remember-check">
+                        <input type="checkbox" name="remember" id="remember"> Remember me
+                    </label>
+                    <a href="forgot_password.php" class="forgot-link">Forgot password?</a>
                 </div>
-                <div class="login-bottom-note" style="margin-top: 0.5rem; margin-left: 250px;">
-                    iMISS
+
+                <!-- Login button -->
+                <button type="submit" class="login-btn">
+                    <i class="fas fa-sign-in-alt"></i> Sign In
+                </button>
+
+                <!-- Sign up link -->
+                <div class="signup-prompt">
+                    Don't have an account? 
+                    <a href="<?= BASE_URL ?>/public/register.php" class="signup-link">Sign up now</a>
                 </div>
-            </div>
+            </form>
+
         </div>
     </div>
 
-    <!-- JavaScript for interactive features -->
+    <!-- JavaScript -->
     <script>
-        // Password toggle functionality
+        // Password toggle
         document.getElementById('togglePassword').addEventListener('click', function() {
             const passwordInput = document.getElementById('password');
             const icon = this.querySelector('i');
@@ -233,14 +238,15 @@ $admin_email = $admin['email'];
             }
         });
         
-        // Input animation
-        const inputs = document.querySelectorAll('.login-form-input');
-        inputs.forEach(input => {
-            input.addEventListener('focus', function() {
-                this.parentElement.style.transform = 'scale(1.01)';
+        // Input animation (subtle)
+        const wrappers = document.querySelectorAll('.input-wrapper');
+        wrappers.forEach(wrapper => {
+            const input = wrapper.querySelector('.form-input');
+            input.addEventListener('focus', () => {
+                wrapper.style.transform = 'scale(1.01)';
             });
-            input.addEventListener('blur', function() {
-                this.parentElement.style.transform = 'scale(1)';
+            input.addEventListener('blur', () => {
+                wrapper.style.transform = 'scale(1)';
             });
         });
         
@@ -254,7 +260,7 @@ $admin_email = $admin['email'];
             passwordInput.addEventListener('input', () => errorMessage.style.display = 'none');
         }
 
-        // Form validation
+        // Basic validation
         document.getElementById('loginForm').addEventListener('submit', function(e) {
             const username = document.getElementById('username').value.trim();
             const password = document.getElementById('password').value.trim();
@@ -264,6 +270,34 @@ $admin_email = $admin['email'];
                 alert('Please fill in all fields');
             }
         });
+
+        // Additional protection against paste for password field
+        const passwordField = document.getElementById('password');
+        if (passwordField) {
+            passwordField.addEventListener('paste', (e) => {
+                e.preventDefault();
+                
+                // Create and show notification
+                const notification = document.createElement('div');
+                notification.className = 'no-paste-notice flash-notice';
+                notification.innerHTML = '<i class="fas fa-ban"></i> Pasting is disabled for security';
+                notification.style.color = '#dc3545';
+                notification.style.marginTop = '2px';
+                
+                // Remove any existing notification
+                const existing = passwordField.closest('.form-group').querySelector('.flash-notice');
+                if (existing) existing.remove();
+                
+                passwordField.closest('.form-group').appendChild(notification);
+                
+                // Remove after animation
+                setTimeout(() => {
+                    if (notification) {
+                        notification.remove();
+                    }
+                }, 2000);
+            });
+        }
     </script>
 </body>
 </html>

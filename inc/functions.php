@@ -149,5 +149,37 @@ function isCourseExpired($expiresAt) {
     return (new DateTime($expiresAt)) < new DateTime();
 }
 
+/* ----------------------
+   PDF Page Counter
+------------------------*/
+/**
+ * Count pages in a PDF file using Smalot PDF Parser
+ * Requires: composer require smalot/pdf-parser
+ */
+function countPdfPages($filepath) {
+    try {
+        // Check if file exists
+        if (!file_exists($filepath)) {
+            error_log("PDF page counting failed: File not found - $filepath");
+            return 0;
+        }
+        
+        // Load the PDF parser
+        require_once __DIR__ . '/../vendor/autoload.php';
+        
+        $parser = new \Smalot\PdfParser\Parser();
+        $pdf = $parser->parseFile($filepath);
+        $pages = $pdf->getPages();
+        
+        $pageCount = count($pages);
+        error_log("PDF page counting: $pageCount pages found in " . basename($filepath));
+        
+        return $pageCount;
+        
+    } catch (Exception $e) {
+        error_log("PDF page counting failed: " . $e->getMessage());
+        return 0;
+    }
+}
 
-?> 
+?>
