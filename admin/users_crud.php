@@ -234,8 +234,37 @@ exit;
 if (isset($_GET['act']) && $_GET['act'] === 'reject' && isset($_GET['id'])) {
 session_start();
 $id = (int)$_GET['id'];
-$pdo->prepare('DELETE FROM users WHERE id = ? AND status = "pending"')->execute([$id]);
-$_SESSION['success'] = "User rejected and deleted";
+
+// Get user details before deleting
+$stmt = $pdo->prepare("SELECT * FROM users WHERE id = ? AND status = 'pending'");
+$stmt->execute([$id]);
+$user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+if ($user) {
+    // Prepare recipient name
+    $recipientName = !empty($user['fname']) ? $user['fname'] : $user['username'];
+    if (!empty($user['lname'])) {
+        $recipientName .= ' ' . $user['lname'];
+    }
+    
+    // Delete the user
+    $pdo->prepare('DELETE FROM users WHERE id = ? AND status = "pending"')->execute([$id]);
+    $_SESSION['success'] = "User rejected and deleted";
+    
+    // SEND REJECTION EMAIL
+    if (function_exists('sendRejectionNotification')) {
+        $emailResult = sendRejectionNotification($user['email'], $recipientName);
+        
+        if ($emailResult['success']) {
+            $_SESSION['success'] .= " and notification email sent to " . $user['email'];
+        } else {
+            $_SESSION['warning'] = "User rejected but notification email failed: " . $emailResult['message'];
+        }
+    }
+} else {
+    $_SESSION['error'] = "User not found or already processed";
+}
+
 header('Location: users_crud.php');
 exit;
 }

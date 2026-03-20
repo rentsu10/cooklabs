@@ -4,6 +4,11 @@ require_once __DIR__ . '/../inc/auth.php';
 require_login();
 
 $userId = $_SESSION['user']['id'];
+$userRole = $_SESSION['user']['role'] ?? 'user';
+$isAdmin = ($userRole === 'admin' || $userRole === 'superadmin');
+$isProponent = ($userRole === 'proponent');
+
+// ========== COMMON DATA FOR ALL ROLES ==========
 
 // Fetch all courses with enrollment info for current user
 $stmt = $pdo->prepare("
@@ -56,6 +61,46 @@ foreach ($news as $item) {
     if (!($item['is_read'] ?? 0)) {
         $unreadCount++;
     }
+}
+
+// ========== ADMIN-SPECIFIC DATA ==========
+
+$pendingUsers = [];
+$totalPending = 0;
+
+if ($isAdmin) {
+    // Fetch pending users for admin dashboard
+    $stmt = $pdo->prepare("
+        SELECT id, username, fname, lname, email, created_at 
+        FROM users 
+        WHERE status = 'pending' 
+        ORDER BY created_at DESC 
+        LIMIT 5
+    ");
+    $stmt->execute();
+    $pendingUsers = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    // Get total count for "View All" link
+    $countStmt = $pdo->query("SELECT COUNT(*) FROM users WHERE status = 'pending'");
+    $totalPending = $countStmt->fetchColumn();
+}
+
+// ========== PROPONENT-SPECIFIC DATA ==========
+
+$proponentCourses = [];
+if ($isProponent) {
+    // Fetch courses created by this proponent
+    $courseStmt = $pdo->prepare("
+        SELECT c.id, c.title, c.description, c.thumbnail, c.created_at,
+               (SELECT COUNT(*) FROM enrollments WHERE course_id = c.id) as student_count,
+               (SELECT COUNT(*) FROM enrollments WHERE course_id = c.id AND status = 'completed') as completed_count
+        FROM courses c
+        WHERE c.proponent_id = ? AND c.is_active = 1
+        ORDER BY c.created_at DESC
+        LIMIT 5
+    ");
+    $courseStmt->execute([$userId]);
+    $proponentCourses = $courseStmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
 // Handle AJAX request to mark news as read
@@ -133,200 +178,6 @@ function get_author_name($item) {
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/dashboard.css">
-    <style>
-        /* Role badge styles - rounded 50px */
-        .role-badge {
-            display: inline-block;
-            padding: 0.2rem 0.8rem;
-            font-size: 0.7rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            border: 2px solid;
-            box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.1);
-            border-radius: 50px !important; /* Rounded, not sharp */
-            color: white;
-            white-space: nowrap;
-            margin-left: 5px;
-        }
-        
-        .badge-superadmin { 
-            background: #1d6fb0; 
-            border-color: #0f4980; 
-        }
-        .badge-admin { 
-            background: #c0392b; 
-            border-color: #a93226; 
-        }
-        .badge-proponent { 
-            background: #8e44ad; 
-            border-color: #6c3483; 
-        }
-        .badge-user { 
-            background: #28a745; 
-            border-color: #1e7e34; 
-        }
-        
-        /* Update news author display */
-        .news-author {
-            display: inline-flex;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 4px;
-        }
-        
-        .news-author i {
-            margin-right: 2px;
-        }
-        
-        /* Make news container scrollable */
-        .news-card .card-content {
-            max-height: 600px;
-            overflow-y: auto;
-            padding-right: 10px;
-        }
-        
-        /* Auto-hiding scrollbar */
-        .news-card .card-content {
-            scrollbar-width: thin;
-            scrollbar-color: #1d6fb0 #eaf2fc;
-            transition: scrollbar-color 0.3s ease;
-        }
-        
-        .news-card .card-content::-webkit-scrollbar {
-            width: 8px;
-            transition: opacity 0.3s ease;
-        }
-        
-        .news-card .card-content::-webkit-scrollbar-track {
-            background: #eaf2fc;
-            border: 1px solid #b8d6f5;
-        }
-        
-        .news-card .card-content::-webkit-scrollbar-thumb {
-            background: #1d6fb0;
-            border: 1px solid #0f4980;
-            opacity: 0;
-            transition: opacity 0.3s ease;
-        }
-        
-        .news-card .card-content::-webkit-scrollbar-thumb:hover {
-            background: #1a70b5;
-        }
-        
-        /* Auto-hide scrollbar when not scrolling */
-        .news-card .card-content.scrollbar-hidden::-webkit-scrollbar-thumb {
-            opacity: 0;
-        }
-        
-        .news-card .card-content.scrollbar-visible::-webkit-scrollbar-thumb {
-            opacity: 1;
-        }
-        
-        /* Unread indicator styles - using green shades */
-        .news-item {
-            position: relative;
-            transition: all 0.2s ease;
-        }
-        
-        .news-item.unread {
-            background-color: #e8f5e9;  /* Light green background */
-            border-left: 4px solid #4caf50;  /* Green left border */
-        }
-        
-        .news-item.unread .news-header h5 {
-            font-weight: 700;  /* Bold title for unread */
-            color: #2e7d32;  /* Dark green text */
-        }
-        
-        .unread-dot {
-            position: absolute;
-            top: 12px;
-            right: 40px;
-            width: 10px;
-            height: 10px;
-            background-color: #f44336;  /* Red dot for visibility */
-            border: 2px solid #ffffff;
-            border-radius: 50%;
-            box-shadow: 0 0 0 1px #f44336;
-            animation: pulse 2s infinite;
-            z-index: 3;
-        }
-        
-        @keyframes pulse {
-            0% {
-                box-shadow: 0 0 0 0 rgba(244, 67, 54, 0.7);
-            }
-            70% {
-                box-shadow: 0 0 0 6px rgba(244, 67, 54, 0);
-            }
-            100% {
-                box-shadow: 0 0 0 0 rgba(244, 67, 54, 0);
-            }
-        }
-        
-        /* Read state - back to normal */
-        .news-item.read {
-            background-color: transparent;
-            border-left: none;
-        }
-        
-        .news-item.read .news-header h5 {
-            font-weight: 500;
-            color: #07223b;
-        }
-        
-        /* Ensure the expand icon doesn't overlap with the dot */
-        .news-item .expand-icon {
-            position: relative;
-            z-index: 2;
-        }
-        
-        /* Notification counter - positioned at top right of the card */
-        .news-card {
-            position: relative;
-        }
-        
-        .notification-counter {
-            position: absolute;
-            top: -10px;
-            right: -10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background-color: #dc3545;
-            color: white;
-            font-size: 1rem;
-            font-weight: 700;
-            min-width: 24px;
-            height: 24px;
-            padding: 0 6px;
-            border-radius: 50px;
-            border: 2px solid #a71d2a;
-            box-shadow: 3px 3px 0 #7a151f;
-            z-index: 10;
-            animation: bounce 1s ease;
-        }
-        
-        @keyframes bounce {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.1); }
-        }
-        
-        /* Update section header to remove inline counter */
-        .section-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 10px;
-        }
-        
-        .section-header h3 {
-            display: flex;
-            align-items: center;
-            margin: 0;
-        }
-    </style>
 </head>
 <body>
     <!-- Sidebar -->
@@ -338,13 +189,19 @@ function get_author_name($item) {
     <div class="main-content-wrapper">
         <!-- Dashboard Header -->
         <div class="dashboard-header">
-            <h1>Welcome Back, <?= htmlspecialchars($_SESSION['user']['fname'] ?? 'Chef') ?>!</h1>
-            <p>Track your ongoing and completed courses</p>
+            <h1>Welcome Back, <?= htmlspecialchars($_SESSION['user']['fname'] ?? 'User') ?>!</h1>
+            <p>
+                <?php 
+                if ($isAdmin) echo 'System Overview';
+                elseif ($isProponent) echo 'Course Management Overview';
+                else echo 'Track your ongoing and completed courses';
+                ?>
+            </p>
         </div>
 
         <!-- Dashboard Grid -->
         <div class="dashboard-grid">
-            <!-- LEFT COLUMN: News (full height) -->
+            <!-- LEFT COLUMN: News (full height) - SAME FOR ALL ROLES -->
             <div>
                 <div class="dashboard-card news-card">
                     <?php if ($unreadCount > 0): ?>
@@ -355,15 +212,12 @@ function get_author_name($item) {
                         <h3>
                             <i class="fas fa-newspaper"></i>News & Announcements
                         </h3>
-                        <?php if(is_admin()): ?>
-                            <a href="<?= BASE_URL ?>/admin/news_crud.php">View All</a>
-                        <?php endif; ?>
+                        <a href="<?= BASE_URL ?>/admin/news_crud.php">View All</a>
                     </div>
                     
                     <div class="card-content" id="newsContainer">
                         <?php if (!empty($news)): ?>
                             <?php foreach ($news as $index => $item): 
-                                // Determine author display name
                                 $authorName = get_author_name($item);
                                 $authorRole = $item['role'] ?? 'user';
                                 $isRead = $item['is_read'] ?? 0;
@@ -399,104 +253,287 @@ function get_author_name($item) {
                 </div>
             </div>
 
-            <!-- RIGHT COLUMN: Ongoing + Completed Courses (stacked) -->
+            <!-- RIGHT COLUMN: Role-specific content -->
             <div class="courses-container">
-                <!-- Ongoing Courses -->
-                <div class="course-card-wrapper">
-                    <div class="section-header">
-                        <h3><i class="fas fa-play-circle"></i>Ongoing Courses</h3>
-                    </div>
-                    
-                    <div class="card-content">
-                        <?php if (!empty($ongoingCourses)): ?>
-                            <?php foreach ($ongoingCourses as $c): 
-                                // Calculate progress
-                                $progressPercent = 0;
-                                if ($c['progress'] && ($c['file_pdf'] || $c['file_video'])) {
-                                    $totalDuration = 0;
-                                    if ($c['file_pdf']) $totalDuration += 60;
-                                    if ($c['file_video']) $totalDuration += 300;
-                                    if ($totalDuration > 0) {
-                                        $progressPercent = min(100, round(($c['progress'] / $totalDuration) * 100));
-                                    }
-                                }
-                            ?>
-                                <a href="<?= BASE_URL ?>/public/course_view.php?id=<?= $c['id'] ?>" class="course-card-link">
-                                    <div class="course-card">
-                                        <div class="course-card-img">
-                                            <img src="<?= BASE_URL ?>/uploads/images/<?= htmlspecialchars($c['thumbnail'] ?: 'Course Image.png') ?>" alt="Course">
-                                        </div>
-                                        <div class="course-card-body">
-                                            <div class="course-card-title">
-                                                <h6><?= htmlspecialchars($c['title']) ?></h6>
-                                                <span class="course-badge badge-ongoing">
-                                                    <i class="fas fa-play"></i> Ongoing
-                                                </span>
-                                            </div>
-                                            <p><?= htmlspecialchars(substr($c['description'], 0, 60)) ?>...</p>
-                                            
-                                            <div class="course-progress">
-                                                <div class="progress">
-                                                    <div class="progress-bar" style="width: <?= $progressPercent ?>%;"></div>
-                                                </div>
-                                                <div class="progress-percent"><?= $progressPercent ?>% complete</div>
-                                            </div>
-                                        </div>
-                                    </div>
+                <?php if ($isAdmin): ?>
+                    <!-- ADMIN VIEW: Pending Users Preview (Top) -->
+                    <div class="course-card-wrapper">
+                        <div class="section-header">
+                            <h3><i class="fas fa-user-clock"></i> Pending Approvals</h3>
+                            <?php if ($totalPending > 5): ?>
+                                <a href="<?= BASE_URL ?>/admin/users_crud.php" class="view-all-link">
+                                    View All (<?= $totalPending ?>)
                                 </a>
-                            <?php endforeach; ?>
-                        <?php else: ?>
-                            <div class="empty-state">
-                                <i class="fas fa-play-circle"></i>
-                                <h4>No ongoing courses</h4>
-                                <p>Browse courses to start learning</p>
-                            </div>
-                        <?php endif; ?>
+                            <?php endif; ?>
+                        </div>
+                        
+                        <div class="card-content">
+                            <?php if (!empty($pendingUsers)): ?>
+                                <table class="pending-users-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Email</th>
+                                            <th>Registered</th>
+                                            <th>Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php foreach ($pendingUsers as $user): ?>
+                                        <tr>
+                                            <td>
+                                                <strong><?= htmlspecialchars($user['fname'] . ' ' . $user['lname']) ?></strong>
+                                                <br><small><?= htmlspecialchars($user['username']) ?></small>
+                                            </td>
+                                            <td><?= htmlspecialchars($user['email']) ?></td>
+                                            <td><?= date('M d', strtotime($user['created_at'])) ?></td>
+                                            <td>
+                                                <a href="<?= BASE_URL ?>/admin/users_crud.php?act=confirm&id=<?= $user['id'] ?>" 
+                                                   class="btn-approve-small"
+                                                   onclick="return confirm('Approve this user?')">
+                                                    <i class="fas fa-check"></i>
+                                                </a>
+                                                <a href="<?= BASE_URL ?>/admin/users_crud.php?act=reject&id=<?= $user['id'] ?>" 
+                                                   class="btn-reject-small"
+                                                   onclick="return confirm('Reject this user?')">
+                                                    <i class="fas fa-times"></i>
+                                                </a>
+                                            </td>
+                                        </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            <?php else: ?>
+                                <div class="empty-state">
+                                    <i class="fas fa-user-check"></i>
+                                    <h4>No pending approvals</h4>
+                                    <p>All users are confirmed</p>
+                                </div>
+                            <?php endif; ?>
+                        </div>
                     </div>
-                </div>
 
-                <!-- Completed Courses -->
-                <div class="course-card-wrapper">
-                    <div class="section-header">
-                        <h3><i class="fas fa-check-circle"></i>Completed Courses</h3>
-                    </div>
-                    
-                    <div class="card-content">
-                        <?php if (!empty($completedCourses)): ?>
-                            <?php foreach ($completedCourses as $c): ?>
-                                <a href="<?= BASE_URL ?>/public/course_view.php?id=<?= $c['id'] ?>" class="course-card-link">
-                                    <div class="course-card">
-                                        <div class="course-card-img">
-                                            <img src="<?= BASE_URL ?>/uploads/images/<?= htmlspecialchars($c['thumbnail'] ?: 'Course Image.png') ?>" alt="Course">
-                                        </div>
-                                        <div class="course-card-body">
-                                            <div class="course-card-title">
-                                                <h6><?= htmlspecialchars($c['title']) ?></h6>
-                                                <span class="course-badge badge-completed">
-                                                    <i class="fas fa-check"></i> Done
-                                                </span>
-                                            </div>
-                                            <p><?= htmlspecialchars(substr($c['description'], 0, 60)) ?>...</p>
-                                            
-                                            <?php if (!empty($c['completed_at'])): ?>
-                                                <div class="completed-date">
-                                                    <i class="fas fa-calendar-check"></i> 
-                                                    <?= date('M d, Y', strtotime($c['completed_at'])) ?>
-                                                </div>
-                                            <?php endif; ?>
-                                        </div>
-                                    </div>
-                                </a>
-                            <?php endforeach; ?>
-                        <?php else: ?>
-                            <div class="empty-state">
-                                <i class="fas fa-check-circle"></i>
-                                <h4>No completed courses yet</h4>
-                                <p>Keep learning!</p>
+                    <!-- ADMIN VIEW: Calendar & Clock (Bottom) -->
+                    <div class="course-card-wrapper" style="padding-top: 0;">
+                        <div class="datetime-split-container" style="height: 100%;">
+                            <!-- LEFT SIDE: Calendar (full height) -->
+                            <div class="calendar-container" style="height: 100%; display: flex; flex-direction: column;">
+                                <div class="calendar-header" id="calendarMonthYear"></div>
+                                <div class="calendar-weekdays">
+                                    <div>Su</div>
+                                    <div>Mo</div>
+                                    <div>Tu</div>
+                                    <div>We</div>
+                                    <div>Th</div>
+                                    <div>Fr</div>
+                                    <div>Sa</div>
+                                </div>
+                                <div class="calendar-days" id="miniCalendar" style="flex: 1;"></div>
                             </div>
-                        <?php endif; ?>
+                            
+                            <!-- RIGHT SIDE: Vintage Alarm Clock (full height) -->
+                            <div class="alarm-clock-container" style="height: 100%; display: flex; flex-direction: column; justify-content: center;">
+                                <div class="alarm-clock-face">
+                                    <div class="alarm-time" id="alarmTime" style="color: #4fc3ff; text-shadow: 0 0 8px #1e88e5, 0 0 2px #0d47a1;">00:00:00</div>
+                                    <div class="alarm-date" id="alarmDate">SYSTEM TIME · COOKLABS 2026</div>
+                                </div>
+                                <div class="alarm-buttons">
+                                    <div class="alarm-btn alarm-btn-red" title="Snooze"></div>
+                                    <div class="alarm-btn alarm-btn-green" title="Alarm On/Off"></div>
+                                    <div class="alarm-btn alarm-btn-yellow" title="Light"></div>
+                                </div>
+                                <div class="alarm-label">LE FARCEUR v.1225</div>
+                            </div>
+                        </div>
                     </div>
-                </div>
+
+                <?php elseif ($isProponent): ?>
+                    <!-- PROPONENT VIEW: Course Management Preview (Top) -->
+                    <div class="course-card-wrapper">
+                        <div class="section-header">
+                            <h3><i class="fas fa-chalkboard-teacher"></i> Your Courses</h3>
+                            <a href="<?= BASE_URL ?>/proponent/courses_crud.php" class="view-all-link">
+                                <i class="fas fa-plus"></i> Manage Courses
+                            </a>
+                        </div>
+                        
+                        <div class="card-content">
+                            <?php if (!empty($proponentCourses)): ?>
+                                <?php foreach ($proponentCourses as $course): 
+                                    $enrollmentRate = $course['student_count'] > 0 
+                                        ? round(($course['completed_count'] / $course['student_count']) * 100) 
+                                        : 0;
+                                ?>
+                                    <a href="<?= BASE_URL ?>/proponent/view_course.php?id=<?= $course['id'] ?>" class="course-card-link">
+                                        <div class="course-card">
+                                            <div class="course-card-img">
+                                                <img src="<?= BASE_URL ?>/uploads/images/<?= htmlspecialchars($course['thumbnail'] ?: 'Course Image.png') ?>" alt="Course">
+                                            </div>
+                                            <div class="course-card-body">
+                                                <div class="course-card-title">
+                                                    <h6><?= htmlspecialchars(substr($course['title'], 0, 50)) ?><?= strlen($course['title']) > 50 ? '...' : '' ?></h6>
+                                                </div>
+                                                <p><?= htmlspecialchars(substr($course['description'], 0, 60)) ?>...</p>
+                                                
+                                                <div class="course-stats" style="display: flex; gap: 0.5rem; margin-top: 0.3rem; font-size: 0.75rem; color: #1e4465;">
+                                                    <span><i class="fas fa-users"></i> <?= $course['student_count'] ?> enrolled</span>
+                                                    <span><i class="fas fa-check-circle"></i> <?= $course['completed_count'] ?> completed</span>
+                                                </div>
+                                                
+                                                <div class="course-progress" style="margin-top: 0.3rem;">
+                                                    <div class="progress" style="height: 4px;">
+                                                        <div class="progress-bar bg-success" style="width: <?= $enrollmentRate ?>%;"></div>
+                                                    </div>
+                                                    <div class="progress-percent" style="font-size: 0.65rem;"><?= $enrollmentRate ?>% completion rate</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </a>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <div class="empty-state">
+                                    <i class="fas fa-chalkboard-teacher"></i>
+                                    <h4>No courses yet</h4>
+                                    <p>Create your first course to get started</p>
+                                    <a href="<?= BASE_URL ?>/proponent/courses_crud.php?act=addform" class="btn-view-enrollees" style="margin-top: 0.5rem; padding: 0.3rem 1rem; font-size: 0.8rem;">
+                                        <i class="fas fa-plus"></i> Create Course
+                                    </a>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+
+                    <!-- PROPONENT VIEW: Calendar & Clock (Bottom) - Same as Admin -->
+                    <div class="course-card-wrapper" style="padding-top: 0;">
+                        <div class="datetime-split-container" style="height: 100%;">
+                            <!-- LEFT SIDE: Calendar (full height) -->
+                            <div class="calendar-container" style="height: 100%; display: flex; flex-direction: column;">
+                                <div class="calendar-header" id="calendarMonthYear"></div>
+                                <div class="calendar-weekdays">
+                                    <div>Su</div>
+                                    <div>Mo</div>
+                                    <div>Tu</div>
+                                    <div>We</div>
+                                    <div>Th</div>
+                                    <div>Fr</div>
+                                    <div>Sa</div>
+                                </div>
+                                <div class="calendar-days" id="miniCalendar" style="flex: 1;"></div>
+                            </div>
+                            
+                            <!-- RIGHT SIDE: Vintage Alarm Clock (full height) -->
+                            <div class="alarm-clock-container" style="height: 100%; display: flex; flex-direction: column; justify-content: center;">
+                                <div class="alarm-clock-face">
+                                    <div class="alarm-time" id="alarmTime" style="color: #4fc3ff; text-shadow: 0 0 8px #1e88e5, 0 0 2px #0d47a1;">00:00:00</div>
+                                    <div class="alarm-date" id="alarmDate">SYSTEM TIME · COOKLABS 2026</div>
+                                </div>
+                                <div class="alarm-buttons">
+                                    <div class="alarm-btn alarm-btn-red" title="Snooze"></div>
+                                    <div class="alarm-btn alarm-btn-green" title="Alarm On/Off"></div>
+                                    <div class="alarm-btn alarm-btn-yellow" title="Light"></div>
+                                </div>
+                                <div class="alarm-label">LE FARCEUR v.1225</div>
+                            </div>
+                        </div>
+                    </div>
+
+                <?php else: ?>
+                    <!-- REGULAR USER VIEW: Ongoing Courses (Top) -->
+                    <div class="course-card-wrapper">
+                        <div class="section-header">
+                            <h3><i class="fas fa-play-circle"></i>Ongoing Courses</h3>
+                        </div>
+                        
+                        <div class="card-content">
+                            <?php if (!empty($ongoingCourses)): ?>
+                                <?php foreach ($ongoingCourses as $c): 
+                                    $progressPercent = 0;
+                                    if ($c['progress'] && ($c['file_pdf'] || $c['file_video'])) {
+                                        $totalDuration = 0;
+                                        if ($c['file_pdf']) $totalDuration += 60;
+                                        if ($c['file_video']) $totalDuration += 300;
+                                        if ($totalDuration > 0) {
+                                            $progressPercent = min(100, round(($c['progress'] / $totalDuration) * 100));
+                                        }
+                                    }
+                                ?>
+                                    <a href="<?= BASE_URL ?>/public/course_view.php?id=<?= $c['id'] ?>" class="course-card-link">
+                                        <div class="course-card">
+                                            <div class="course-card-img">
+                                                <img src="<?= BASE_URL ?>/uploads/images/<?= htmlspecialchars($c['thumbnail'] ?: 'Course Image.png') ?>" alt="Course">
+                                            </div>
+                                            <div class="course-card-body">
+                                                <div class="course-card-title">
+                                                    <h6><?= htmlspecialchars($c['title']) ?></h6>
+                                                    <span class="course-badge badge-ongoing">
+                                                        <i class="fas fa-play"></i> Ongoing
+                                                    </span>
+                                                </div>
+                                                <p><?= htmlspecialchars(substr($c['description'], 0, 60)) ?>...</p>
+                                                
+                                                <div class="course-progress">
+                                                    <div class="progress">
+                                                        <div class="progress-bar" style="width: <?= $progressPercent ?>%;"></div>
+                                                    </div>
+                                                    <div class="progress-percent"><?= $progressPercent ?>% complete</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </a>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <div class="empty-state">
+                                    <i class="fas fa-play-circle"></i>
+                                    <h4>No ongoing courses</h4>
+                                    <p>Browse courses to start learning</p>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+
+                    <!-- REGULAR USER VIEW: Completed Courses (Bottom) -->
+                    <div class="course-card-wrapper">
+                        <div class="section-header">
+                            <h3><i class="fas fa-check-circle"></i>Completed Courses</h3>
+                        </div>
+                        
+                        <div class="card-content">
+                            <?php if (!empty($completedCourses)): ?>
+                                <?php foreach ($completedCourses as $c): ?>
+                                    <a href="<?= BASE_URL ?>/public/course_view.php?id=<?= $c['id'] ?>" class="course-card-link">
+                                        <div class="course-card">
+                                            <div class="course-card-img">
+                                                <img src="<?= BASE_URL ?>/uploads/images/<?= htmlspecialchars($c['thumbnail'] ?: 'Course Image.png') ?>" alt="Course">
+                                            </div>
+                                            <div class="course-card-body">
+                                                <div class="course-card-title">
+                                                    <h6><?= htmlspecialchars($c['title']) ?></h6>
+                                                    <span class="course-badge badge-completed">
+                                                        <i class="fas fa-check"></i> Done
+                                                    </span>
+                                                </div>
+                                                <p><?= htmlspecialchars(substr($c['description'], 0, 60)) ?>...</p>
+                                                
+                                                <?php if (!empty($c['completed_at'])): ?>
+                                                    <div class="completed-date">
+                                                        <i class="fas fa-calendar-check"></i> 
+                                                        <?= date('M d, Y', strtotime($c['completed_at'])) ?>
+                                                    </div>
+                                                <?php endif; ?>
+                                            </div>
+                                        </div>
+                                    </a>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <div class="empty-state">
+                                    <i class="fas fa-check-circle"></i>
+                                    <h4>No completed courses yet</h4>
+                                    <p>Keep learning!</p>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                <?php endif; ?>
             </div>
         </div>
 
@@ -518,13 +555,11 @@ function get_author_name($item) {
             if (newsContainer) {
                 let scrollTimeout;
                 
-                // Function to show scrollbar
                 function showScrollbar() {
                     newsContainer.classList.add('scrollbar-visible');
                     newsContainer.classList.remove('scrollbar-hidden');
                 }
                 
-                // Function to hide scrollbar after delay
                 function hideScrollbar() {
                     clearTimeout(scrollTimeout);
                     scrollTimeout = setTimeout(() => {
@@ -533,19 +568,10 @@ function get_author_name($item) {
                     }, 2000);
                 }
                 
-                // Initially hidden
                 newsContainer.classList.add('scrollbar-hidden');
-                
-                // Show scrollbar when scrolling
                 newsContainer.addEventListener('scroll', showScrollbar);
-                
-                // Hide scrollbar after scrolling stops
                 newsContainer.addEventListener('scroll', hideScrollbar);
-                
-                // Also show on mouse enter
                 newsContainer.addEventListener('mouseenter', showScrollbar);
-                
-                // Hide on mouse leave after delay
                 newsContainer.addEventListener('mouseleave', hideScrollbar);
             }
             
@@ -558,18 +584,14 @@ function get_author_name($item) {
                 const isRead = item.classList.contains('read');
                 
                 item.addEventListener('click', function(e) {
-                    // Don't toggle if clicking on a link
                     if (e.target.tagName === 'A') return;
                     
-                    // Toggle expanded class
                     this.classList.toggle('expanded');
                     
-                    // If this news item was unread, mark it as read
                     if (!isRead && this.classList.contains('expanded')) {
                         markAsRead(newsId, this);
                     }
                     
-                    // Optional: auto-scroll to keep expanded item in view
                     if (this.classList.contains('expanded')) {
                         setTimeout(() => {
                             this.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -577,9 +599,76 @@ function get_author_name($item) {
                     }
                 });
             });
+            
+            // Update alarm clock
+            function updateAlarmClock() {
+                const now = new Date();
+                
+                // Format time with AM/PM
+                let hours = now.getHours();
+                const minutes = now.getMinutes().toString().padStart(2, '0');
+                const seconds = now.getSeconds().toString().padStart(2, '0');
+                const ampm = hours >= 12 ? 'PM' : 'AM';
+                hours = hours % 12 || 12;
+                
+                const timeStr = `${hours.toString().padStart(2, '0')}:${minutes}:${seconds} ${ampm}`;
+                const alarmTime = document.getElementById('alarmTime');
+                if (alarmTime) alarmTime.textContent = timeStr;
+                
+                // Format date
+                const dateStr = now.toLocaleDateString('en-US', { 
+                    weekday: 'long', 
+                    year: 'numeric', 
+                    month: 'long', 
+                    day: 'numeric' 
+                });
+                const alarmDate = document.getElementById('alarmDate');
+                if (alarmDate) alarmDate.textContent = dateStr;
+                
+                // Update calendar
+                updateMiniCalendar(now);
+                
+                // Update calendar header
+                const monthYear = now.toLocaleDateString('en-US', { 
+                    month: 'long', 
+                    year: 'numeric' 
+                });
+                const calendarHeader = document.getElementById('calendarMonthYear');
+                if (calendarHeader) calendarHeader.textContent = monthYear;
+            }
+            
+            function updateMiniCalendar(date) {
+                const calendar = document.getElementById('miniCalendar');
+                if (!calendar) return;
+                
+                const year = date.getFullYear();
+                const month = date.getMonth();
+                const today = date.getDate();
+                
+                const firstDay = new Date(year, month, 1).getDay();
+                const daysInMonth = new Date(year, month + 1, 0).getDate();
+                
+                let html = '';
+                
+                // Previous month days
+                for (let i = 0; i < firstDay; i++) {
+                    html += `<div class="calendar-day other-month"></div>`;
+                }
+                
+                // Current month days
+                for (let d = 1; d <= daysInMonth; d++) {
+                    const isToday = d === today ? 'today' : '';
+                    html += `<div class="calendar-day ${isToday}">${d}</div>`;
+                }
+                
+                calendar.innerHTML = html;
+            }
+            
+            // Update clock every second
+            setInterval(updateAlarmClock, 1000);
+            updateAlarmClock(); // Initial call
         });
         
-        // Function to mark news as read
         function markAsRead(newsId, newsElement) {
             fetch(window.location.href, {
                 method: 'POST',
@@ -591,22 +680,18 @@ function get_author_name($item) {
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    // Update the UI to show as read
                     newsElement.classList.remove('unread');
                     newsElement.classList.add('read');
                     
-                    // Remove the red dot
                     const dot = newsElement.querySelector('.unread-dot');
                     if (dot) dot.remove();
                     
-                    // Update the unread counter
                     const counter = document.getElementById('unreadCounter');
                     if (counter) {
                         const currentCount = parseInt(counter.textContent);
                         if (currentCount > 1) {
                             counter.textContent = currentCount - 1;
                         } else {
-                            // Remove the counter with animation
                             counter.style.transition = 'opacity 0.3s, transform 0.3s';
                             counter.style.opacity = '0';
                             counter.style.transform = 'scale(0)';

@@ -314,6 +314,60 @@
         }
         exit;
     }
+    // Handle AJAX request to enroll multiple students
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'enroll_multiple') {
+    session_start();
+    $courseId = intval($_POST['course_id'] ?? 0);
+    $studentIds = $_POST['enroll_ids'] ?? [];
+    
+    if (!empty($studentIds) && $courseId && (is_admin() || $course['proponent_id'] == $u['id'])) {
+        try {
+            $pdo->beginTransaction();
+            $enrolled = 0;
+            $skipped = 0;
+            
+            foreach ($studentIds as $studentId) {
+                $studentId = intval($studentId);
+                
+                // Check if already enrolled
+                $stmt = $pdo->prepare("SELECT id FROM enrollments WHERE user_id = ? AND course_id = ?");
+                $stmt->execute([$studentId, $courseId]);
+                
+                if (!$stmt->fetch()) {
+                    // Create enrollment
+                    $stmt = $pdo->prepare('
+                        INSERT INTO enrollments 
+                        (user_id, course_id, enrolled_at, status, progress) 
+                        VALUES (?, ?, NOW(), "ongoing", 0)
+                    ');
+                    $stmt->execute([$studentId, $courseId]);
+                    $enrolled++;
+                } else {
+                    $skipped++;
+                }
+            }
+            
+            $pdo->commit();
+            
+            // Set success message
+            $_SESSION['success'] = "$enrolled student(s) enrolled successfully";
+            if ($skipped > 0) {
+                $_SESSION['warning'] = "$skipped student(s) were already enrolled";
+            }
+            
+        } catch (Exception $e) {
+            $pdo->rollBack();
+            $_SESSION['error'] = 'Error enrolling students: ' . $e->getMessage();
+        }
+    } else {
+        $_SESSION['error'] = 'Invalid parameters or insufficient permissions';
+    }
+    
+    // Redirect back to the same page with the modal open
+    header('Location: ' . $_SERVER['PHP_SELF'] . '?id=' . $courseId . '#enrolleesModal');
+    exit;
+}
+
     ?>
     <!doctype html>
     <html lang="en">
@@ -327,919 +381,7 @@
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
         <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
-        <style>
-            /* ===== SHARP GEOMETRIC COURSE VIEW ===== */
-            * {
-                margin: 0;
-                padding: 0;
-                box-sizing: border-box;
-            }
-
-            body {
-                font-family: 'Inter', Arial, sans-serif;
-                background: #eaf2fc;
-                min-height: 100vh;
-                display: flex;
-            }
-
-            /* Sidebar */
-            .lms-sidebar-container {
-                position: fixed;
-                left: 0;
-                top: 0;
-                width: 280px;
-                height: 100vh;
-                z-index: 1000;
-            }
-
-            /* Main Content */
-            .course-content-wrapper {
-                margin-left: 280px;
-                flex: 1;
-                padding: 2rem 2.5rem;
-                min-height: 100vh;
-                overflow-y: auto;
-            }
-
-            /* Course Header */
-            .course-header {
-                background: #ffffff;
-                border: 3px solid #1a4b77;
-                box-shadow: 12px 12px 0 #123a5e;
-                border-radius: 0px;
-                padding: 2rem;
-                margin-bottom: 2rem;
-            }
-
-            .course-header h3 {
-                font-size: 2rem;
-                font-weight: 700;
-                color: #07223b;
-                margin-bottom: 1rem;
-                border-left: 8px solid #1d6fb0;
-                padding-left: 1.2rem;
-            }
-
-            .course-header p {
-                color: #1e4465;
-                font-size: 1rem;
-                line-height: 1.6;
-                margin-bottom: 0;
-            }
-
-            /* Instructor Card */
-            .course-info-card {
-                background: #ffffff;
-                border: 3px solid #1a4b77;
-                box-shadow: 12px 12px 0 #123a5e;
-                border-radius: 0px;
-                padding: 1.5rem;
-                margin-bottom: 2rem;
-            }
-
-            .course-instructor {
-                display: flex;
-                align-items: center;
-                gap: 1.2rem;
-            }
-
-            .instructor-avatar {
-                width: 60px;
-                height: 60px;
-                background: #1d6fb0;
-                border: 3px solid #0f4980;
-                box-shadow: 4px 4px 0 #0a3458;
-                border-radius: 0px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                font-size: 1.5rem;
-                font-weight: 700;
-                color: white;
-            }
-
-            .instructor-info h5 {
-                font-weight: 700;
-                color: #07223b;
-                margin-bottom: 0.3rem;
-                font-size: 1.2rem;
-            }
-
-            .instructor-info p {
-                color: #5f6f82;
-                margin: 0;
-                font-size: 0.9rem;
-            }
-
-            /* View Enrollees Button */
-            .btn-view-enrollees {
-                background: #1661a3;
-                border: 3px solid #0c314d;
-                box-shadow: 4px 4px 0 #0b263b;
-                padding: 0.6rem 1.5rem;
-                font-weight: 600;
-                color: white;
-                text-decoration: none;
-                border-radius: 0px;
-                transition: all 0.1s ease;
-                display: inline-flex;
-                align-items: center;
-                gap: 8px;
-                font-size: 0.9rem;
-                border: none;
-            }
-
-            .btn-view-enrollees:hover {
-                transform: translate(-2px, -2px);
-                box-shadow: 6px 6px 0 #0b263b;
-                background: #1a70b5;
-                color: white;
-            }
-
-            .btn-archive {
-                background: #6c757d;
-                border: 3px solid #5a6268;
-                box-shadow: 4px 4px 0 #404040;
-            }
-
-            .btn-archive:hover {
-                background: #7a858f;
-            }
-
-            .btn-expired {
-                background: #dc3545;
-                border: 3px solid #a71d2a;
-                box-shadow: 4px 4px 0 #7a151f;
-            }
-
-            .btn-expired:hover {
-                background: #c82333;
-            }
-
-            /* Content Cards */
-            .content-card {
-                background: #ffffff;
-                border: 3px solid #1a4b77;
-                box-shadow: 12px 12px 0 #123a5e;
-                border-radius: 0px;
-                padding: 2rem;
-                margin-bottom: 2rem;
-            }
-
-            .content-card h4, .content-card h5 {
-                font-weight: 700;
-                color: #07223b;
-                margin-bottom: 1.5rem;
-                border-left: 6px solid #1d6fb0;
-                padding-left: 1rem;
-            }
-
-            .content-card h5 i {
-                color: #1d6fb0;
-                margin-right: 8px;
-            }
-
-            .modern-course-info-content {
-                color: #1e4465;
-                font-size: 1rem;
-                line-height: 1.8;
-            }
-
-            /* Assessment Styles */
-            .assessment-container {
-                margin-top: 2rem;
-            }
-            
-            .assessment-header {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                margin-bottom: 1.5rem;
-                flex-wrap: wrap;
-                gap: 1rem;
-            }
-            
-            .assessment-title {
-                font-size: 1.3rem;
-                font-weight: 700;
-                color: #07223b;
-                border-left: 6px solid #1d6fb0;
-                padding-left: 1rem;
-                margin: 0;
-            }
-            
-            .assessment-stats {
-                display: flex;
-                gap: 1rem;
-                flex-wrap: wrap;
-            }
-            
-            .stat-pill {
-                background: #f0f8ff;
-                border: 2px solid #1a4b77;
-                box-shadow: 3px 3px 0 #123a5e;
-                padding: 0.4rem 1rem;
-                font-size: 0.85rem;
-                font-weight: 600;
-                color: #07223b;
-                display: inline-flex;
-                align-items: center;
-                gap: 6px;
-            }
-            
-            /* Fullscreen Button */
-            .fullscreen-btn {
-                background: #1661a3;
-                border: 2px solid #0c314d;
-                box-shadow: 2px 2px 0 #0b263b;
-                color: white;
-                padding: 0.4rem 1rem;
-                cursor: pointer;
-                transition: all 0.1s ease;
-                border-radius: 0px;
-                font-weight: 600;
-                display: inline-flex;
-                align-items: center;
-                gap: 6px;
-                font-size: 0.9rem;
-                margin-left: 1rem;
-            }
-
-            .fullscreen-btn:hover {
-                transform: translate(-1px, -1px);
-                box-shadow: 3px 3px 0 #0b263b;
-                background: #1a70b5;
-            }
-
-            .fullscreen-btn i {
-                font-size: 1rem;
-            }
-
-            /* Fullscreen Mode */
-            .course-content-wrapper.fullscreen-mode {
-                margin-left: 0;
-                padding: 0;
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                z-index: 9999;
-                background: #1a2b3e;
-                overflow: hidden;
-            }
-
-            .fullscreen-mode .lms-sidebar-container {
-                display: none;
-            }
-
-            .fullscreen-mode .course-header,
-            .fullscreen-mode .course-info-card,
-            .fullscreen-mode .kitchen-accent,
-            .fullscreen-mode .students-section,
-            .fullscreen-mode .pdf-viewer,
-            .fullscreen-mode .content-card:not(.assessment-container) {
-                display: none;
-            }
-
-            .fullscreen-mode .assessment-container {
-                margin: 0;
-                padding: 1rem;
-                height: 100vh;
-                display: flex;
-                flex-direction: column;
-                border: none;
-                box-shadow: none;
-                background: transparent;
-            }
-
-            .fullscreen-mode .assessment-container .content-card {
-                display: flex;
-                flex-direction: column;
-                height: 100%;
-                margin: 0;
-                padding: 1.5rem;
-                background: white;
-            }
-
-            .fullscreen-mode .assessment-scroll-container {
-                flex: 1;
-                height: auto;
-                max-height: calc(100vh - 150px);
-            }
-
-            .fullscreen-mode .fullscreen-btn {
-                background: #b71c1c;
-                border-color: #8a1515;
-                box-shadow: 2px 2px 0 #5a0e0e;
-            }
-
-            .fullscreen-mode .fullscreen-btn:hover {
-                background: #c62828;
-            }
-            
-            /* Fixed height container with scrollable content */
-            .assessment-scroll-container {
-                height: 500px;
-                overflow-y: auto;
-                padding-right: 0.5rem;
-                border: 2px solid #1a4b77;
-                background: #f0f8ff;
-                box-shadow: 4px 4px 0 #123a5e;
-            }
-            
-            .question-list {
-                display: flex;
-                flex-direction: column;
-                gap: 1.5rem;
-                padding: 1.5rem;
-            }
-            
-            .question-item {
-                background: white;
-                border: 2px solid #b8d6f5;
-                box-shadow: 4px 4px 0 #a0c0e0;
-                padding: 1.5rem;
-            }
-            
-            .question-header {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                margin-bottom: 1rem;
-                padding-bottom: 0.5rem;
-                border-bottom: 2px solid #2367a3;
-            }
-            
-            .question-number {
-                background: #1d6fb0;
-                color: white;
-                padding: 0.2rem 1rem;
-                font-weight: 700;
-                border: 2px solid #0f4980;
-                box-shadow: 2px 2px 0 #0a3458;
-            }
-            
-            .question-points {
-                color: #1d6fb0;
-                font-weight: 700;
-            }
-            
-            .question-text {
-                font-weight: 600;
-                color: #07223b;
-                margin-bottom: 1rem;
-                font-size: 1.1rem;
-            }
-            
-            .options-grid {
-                display: grid;
-                grid-template-columns: 1fr 1fr;
-                gap: 1rem;
-            }
-            
-            .option-item {
-                background: #f0f8ff;
-                border: 2px solid #b8d6f5;
-                padding: 0.8rem;
-                display: flex;
-                align-items: center;
-                gap: 0.8rem;
-                position: relative;
-            }
-            
-            .option-letter {
-                background: #1d6fb0;
-                color: white;
-                width: 30px;
-                height: 30px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                font-weight: 700;
-                border: 2px solid #0f4980;
-                box-shadow: 2px 2px 0 #0a3458;
-                flex-shrink: 0;
-            }
-            
-            .option-correct {
-                background: #e8f5e9;
-                border-color: #28a745;
-            }
-            
-            .option-correct .option-letter {
-                background: #28a745;
-                border-color: #1e7e34;
-                box-shadow: 2px 2px 0 #166b2c;
-            }
-            
-            .correct-badge {
-                background: #28a745;
-                color: white;
-                padding: 0.1rem 0.5rem;
-                font-size: 0.7rem;
-                font-weight: 700;
-                border: 2px solid #1e7e34;
-                box-shadow: 2px 2px 0 #166b2c;
-                margin-left: auto;
-                white-space: nowrap;
-            }
-            
-            .no-assessment {
-                background: #f0f8ff;
-                border: 2px solid #b8d6f5;
-                box-shadow: 4px 4px 0 #a0c0e0;
-                padding: 3rem;
-                text-align: center;
-                color: #1e4465;
-            }
-            
-            .no-assessment i {
-                font-size: 3rem;
-                color: #b8d6f5;
-                margin-bottom: 1rem;
-            }
-            
-            /* Custom scrollbar */
-            .assessment-scroll-container::-webkit-scrollbar {
-                width: 8px;
-            }
-            
-            .assessment-scroll-container::-webkit-scrollbar-track {
-                background: #eaf2fc;
-                border: 1px solid #b8d6f5;
-            }
-            
-            .assessment-scroll-container::-webkit-scrollbar-thumb {
-                background: #1d6fb0;
-                border: 1px solid #0f4980;
-            }
-            
-            .assessment-scroll-container::-webkit-scrollbar-thumb:hover {
-                background: #1a70b5;
-            }
-
-            /* PDF Viewer */
-            .pdf-viewer {
-                background: #f0f8ff;
-                border: 2px solid #b8d6f5;
-                box-shadow: 4px 4px 0 #a0c0e0;
-                border-radius: 0px;
-                overflow: hidden;
-                margin-bottom: 1rem;
-            }
-
-            .pdf-viewer iframe {
-                border: none;
-                width: 100%;
-                height: 600px;
-            }
-
-            /* Modal Styles - WIDER */
-            .modal-xl {
-                max-width: 95% !important;
-                margin: 1.75rem auto;
-            }
-
-            .modal-content {
-                background: #ffffff;
-                border: 3px solid #1a4b77;
-                box-shadow: 16px 16px 0 #123a5e;
-                border-radius: 0px;
-            }
-
-            .modal-header {
-                background: #1661a3;
-                border-bottom: 3px solid #0c314d;
-                padding: 1.2rem 1.5rem;
-            }
-
-            .modal-header .modal-title {
-                color: white;
-                font-weight: 700;
-                font-size: 1.3rem;
-            }
-
-            .modal-header .btn-close {
-                filter: brightness(0) invert(1);
-                opacity: 0.8;
-            }
-
-            .modal-header .btn-close:hover {
-                opacity: 1;
-            }
-
-            .modal-body {
-                padding: 1.5rem;
-                max-height: 80vh;
-                overflow-y: auto;
-            }
-
-            .modal-footer {
-                border-top: 3px solid #2367a3;
-                padding: 1.2rem 1.5rem;
-                display: flex;
-                justify-content: space-between;
-            }
-
-            /* Stats Cards - Inline with search and action buttons */
-            .stats-search-row {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                flex-wrap: wrap;
-                gap: 1rem;
-                margin-bottom: 1.5rem;
-            }
-
-            .students-stats {
-                display: flex;
-                gap: 1rem;
-                flex-wrap: wrap;
-            }
-
-            .stat-item {
-                background: #f0f8ff;
-                border: 2px solid #1a4b77;
-                box-shadow: 4px 4px 0 #123a5e;
-                border-radius: 0px;
-                padding: 0.6rem 1.2rem;
-                font-size: 0.9rem;
-                font-weight: 600;
-                color: #07223b;
-                display: inline-flex;
-                align-items: center;
-                gap: 8px;
-            }
-
-            .stat-item i {
-                color: #1d6fb0;
-            }
-
-            .action-button-group {
-                display: flex;
-                gap: 0.5rem;
-                flex-wrap: wrap;
-            }
-
-            /* Search Bar */
-            .search-container {
-                display: flex;
-                align-items: center;
-                background: white;
-                border: 2px solid #1a4b77;
-                box-shadow: 4px 4px 0 #123a5e;
-                border-radius: 0px;
-                overflow: hidden;
-                width: 100%;
-                max-width: 350px;
-            }
-
-            .search-input {
-                flex: 1;
-                padding: 0.7rem 1rem;
-                border: none;
-                font-family: 'Inter', sans-serif;
-                font-size: 0.95rem;
-                outline: none;
-                color: #07223b;
-            }
-
-            .search-input::placeholder {
-                color: #5f6f82;
-                opacity: 0.7;
-            }
-
-            .search-icon {
-                background: #1661a3;
-                border: none;
-                border-left: 2px solid #1a4b77;
-                padding: 0.7rem 1.2rem;
-                color: white;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-            }
-
-            /* Table */
-            .table-responsive {
-                border: 2px solid #1a4b77;
-                box-shadow: 4px 4px 0 #123a5e;
-                border-radius: 0px;
-                overflow: hidden;
-                max-height: 500px;
-                overflow-y: auto;
-            }
-
-            .table {
-                width: 100%;
-                border-collapse: collapse;
-                margin: 0;
-            }
-
-            .table thead th {
-                background: #d7e9ff;
-                font-weight: 700;
-                color: #07223b;
-                border-bottom: 3px solid #1a4b77;
-                padding: 0.8rem 1rem;
-                font-size: 0.8rem;
-                text-transform: uppercase;
-                letter-spacing: 0.5px;
-                position: sticky;
-                top: 0;
-                background: #d7e9ff;
-                z-index: 10;
-            }
-
-            .table tbody td {
-                padding: 1rem;
-                border-bottom: 2px solid #b8d6f5;
-                color: #1e4465;
-                vertical-align: middle;
-                font-size: 0.9rem;
-            }
-
-            .table tbody tr:hover {
-                background: #f0f8ff;
-            }
-
-            /* Student Avatar */
-            .student-avatar {
-                width: 40px;
-                height: 40px;
-                background: #1d6fb0;
-                border: 2px solid #0f4980;
-                box-shadow: 3px 3px 0 #0a3458;
-                border-radius: 0px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                font-weight: 700;
-                color: white;
-                font-size: 0.9rem;
-            }
-
-            /* Status Badges */
-            .status-badge {
-                display: inline-flex;
-                align-items: center;
-                gap: 4px;
-                padding: 0.3rem 0.8rem;
-                font-size: 0.75rem;
-                font-weight: 700;
-                border: 2px solid;
-                box-shadow: 2px 2px 0 rgba(0,0,0,0.1);
-                border-radius: 50px;
-            }
-
-            .badge-ongoing {
-                background: #ffc107;
-                border-color: #b88f1f;
-                color: #07223b;
-            }
-
-            .badge-completed {
-                background: #28a745;
-                border-color: #1e7e34;
-                color: white;
-            }
-
-            .badge-expired {
-                background: #6c757d;
-                border-color: #5a6268;
-                color: white;
-            }
-
-            /* Assessment Status Badges */
-            .assessment-passed {
-                background: #d4edda;
-                border-color: #28a745;
-                color: #155724;
-                padding: 0.25rem 0.5rem;
-                font-size: 0.75rem;
-                font-weight: 600;
-                border-radius: 0px;
-                display: inline-flex;
-                align-items: center;
-                gap: 4px;
-            }
-
-            .assessment-failed {
-                background: #f8d7da;
-                border-color: #dc3545;
-                color: #721c24;
-                padding: 0.25rem 0.5rem;
-                font-size: 0.75rem;
-                font-weight: 600;
-                border-radius: 0px;
-                display: inline-flex;
-                align-items: center;
-                gap: 4px;
-            }
-
-            .assessment-none {
-                background: #e2e3e5;
-                border-color: #6c757d;
-                color: #383d41;
-                padding: 0.25rem 0.5rem;
-                font-size: 0.75rem;
-                font-weight: 600;
-                border-radius: 0px;
-                display: inline-flex;
-                align-items: center;
-                gap: 4px;
-            }
-
-            /* Progress Bar Mini */
-            .progress-mini {
-                width: 80px;
-                height: 6px;
-                background: #e0e0e0;
-                border: 1px solid #aaa;
-                border-radius: 0px;
-                overflow: hidden;
-            }
-
-            .progress-mini-bar {
-                height: 100%;
-                background: #1d6fb0;
-                transition: width 0.3s ease;
-            }
-
-            /* Action Buttons */
-            .btn-drop {
-                background: #dc3545;
-                border: 2px solid #a71d2a;
-                box-shadow: 2px 2px 0 #7a151f;
-                color: white;
-                padding: 0.3rem 0.8rem;
-                font-size: 0.75rem;
-                border-radius: 0px;
-                cursor: pointer;
-                transition: all 0.1s ease;
-                display: inline-flex;
-                align-items: center;
-                gap: 4px;
-                border: none;
-            }
-
-            .btn-drop:hover {
-                transform: translate(-1px, -1px);
-                box-shadow: 3px 3px 0 #7a151f;
-                background: #c82333;
-            }
-
-            .btn-enroll-sm {
-                background: #28a745;
-                border: 2px solid #1e7e34;
-                box-shadow: 2px 2px 0 #166b2c;
-                color: white;
-                padding: 0.2rem 0.5rem;
-                font-size: 0.7rem;
-                border-radius: 0px;
-                cursor: pointer;
-                transition: all 0.1s ease;
-                display: inline-flex;
-                align-items: center;
-                gap: 4px;
-                border: none;
-            }
-
-            .btn-enroll-sm:hover {
-                transform: translate(-1px, -1px);
-                box-shadow: 3px 3px 0 #166b2c;
-                background: #34ce57;
-            }
-
-            /* Empty State */
-            .empty-state {
-                text-align: center;
-                padding: 3rem;
-                background: #f0f8ff;
-                border: 2px solid #b8d6f5;
-                box-shadow: 6px 6px 0 #a0c0e0;
-                border-radius: 0px;
-            }
-
-            .empty-state i {
-                font-size: 3rem;
-                color: #b8d6f5;
-                margin-bottom: 1rem;
-            }
-
-            .empty-state h5 {
-                font-weight: 700;
-                color: #07223b;
-                margin-bottom: 0.5rem;
-            }
-
-            .empty-state p {
-                color: #5f6f82;
-            }
-
-            /* Kitchen accent */
-            .kitchen-accent {
-                display: flex;
-                justify-content: center;
-                gap: 1rem;
-                margin-top: 2rem;
-                opacity: 0.4;
-            }
-
-            .kitchen-accent i {
-                color: #1d6fb0;
-                font-size: 0.9rem;
-            }
-
-            /* Two-column layout for modals */
-            .modal-split-layout {
-                display: flex;
-                gap: 2rem;
-                transition: all 0.3s ease;
-            }
-
-            .modal-left {
-                flex: 2;
-                transition: flex 0.3s ease;
-            }
-
-            .modal-right {
-                flex: 1;
-                border-left: 3px solid #2367a3;
-                padding-left: 2rem;
-                transition: all 0.3s ease;
-            }
-
-            /* When right section is hidden, adjust accordingly */
-            .modal-right[style*="display: none"] + .modal-left {
-                flex: 2;
-            }
-
-            .enrolled-row {
-                cursor: default;
-                transition: background-color 0.2s ease;
-            }
-
-            .enrolled-row.clickable {
-                cursor: pointer !important;
-            }
-
-            .enrolled-row.clickable:hover {
-                background-color: #e3f2fd !important;
-            }
-
-            /* Selected row highlighting */
-            .enrolled-row.selected-row {
-                background-color: #d4edda !important;
-                border: 4px solid #28a745 !important;
-            }
-
-            .enrolled-row.clickable.selected-row:hover {
-                background-color: #c3e6cb !important;
-            }
-
-            /* Responsive */
-            @media (max-width: 768px) {
-                .course-content-wrapper {
-                    margin-left: 0;
-                    padding: 1rem;
-                }
-                .lms-sidebar-container {
-                    position: relative;
-                    width: 100%;
-                    height: auto;
-                }
-                .students-stats {
-                    flex-direction: column;
-                }
-                .options-grid {
-                    grid-template-columns: 1fr;
-                }
-                .assessment-scroll-container {
-                    height: 400px;
-                }
-                .modal-split-layout {
-                    flex-direction: column;
-                }
-                .modal-right {
-                    border-left: none;
-                    border-top: 3px solid #2367a3;
-                    padding-left: 0;
-                    padding-top: 1.5rem;
-                }
-                .stats-search-row {
-                    flex-direction: column;
-                    align-items: flex-start;
-                }
-                .action-button-group {
-                    width: 100%;
-                }
-                .search-container {
-                    max-width: 100%;
-                }
-            }
-        </style>
+        <link rel="stylesheet" href="../assets/css/viewcourse.css">
     </head>
     <body>
         <!-- Sidebar -->
@@ -1466,10 +608,14 @@
 
                     <!-- RIGHT SIDE: Enroll New Students (hidden by default) -->
                     <div class="modal-right" id="enrollSection" style="display: none;">
-
-                        <h5 class="mb-3" style="border-left: 6px solid #28a745; padding-left: 1rem;">
-                            <i class="fas fa-user-plus text-success me-2"></i>Enroll New Students
-                        </h5>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                            <h5 class="mb-0" style="border-left: 6px solid #28a745; padding-left: 1rem;">
+                                <i class="fas fa-user-plus text-success me-2"></i>Enroll New Students
+                            </h5>
+                            <button class="btn-view-enrollees" onclick="toggleEnrollSection()" style="background: #dc3545; padding: 0.3rem 0.8rem; font-size: 0.8rem;">
+                                <i class="fas fa-times"></i> Close
+                            </button>
+                        </div>
 
                         <!-- Search Bar for available students -->
                         <div class="mb-3">
@@ -1479,21 +625,27 @@
                             </div>
                         </div>
 
-                        <!-- Available Students List -->
+                        <!-- Available Students List with Checkboxes -->
                         <?php if(count($availableStudents) > 0): ?>
-                            <div class="table-responsive" style="max-height: 400px;">
+                            <div class="table-responsive" style="max-height: 350px;">
                                 <table class="table" id="availableTable">
                                     <thead>
                                         <tr>
+                                            <th style="width: 40px;">
+                                                <input type="checkbox" id="selectAllAvailable" onchange="toggleAllAvailable()">
+                                            </th>
                                             <th>Student</th>
-                                            <th>Action</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         <?php foreach($availableStudents as $student): ?>
-                                        <tr class="available-row" 
+                                        <tr class="available-row available-checkbox-row" 
+                                            data-id="<?= $student['id'] ?>"
                                             data-name="<?= strtolower(htmlspecialchars($student['fname'] . ' ' . $student['lname'])) ?>"
                                             data-email="<?= strtolower(htmlspecialchars($student['email'] ?? '')) ?>">
+                                            <td>
+                                                <input type="checkbox" class="available-checkbox" value="<?= $student['id'] ?>">
+                                            </td>
                                             <td>
                                                 <div class="d-flex align-items-center">
                                                     <div class="student-avatar me-2" style="width: 30px; height: 30px; font-size: 0.8rem;">
@@ -1505,22 +657,20 @@
                                                     </div>
                                                 </div>
                                             </td>
-                                            <td>
-                                                <button class="btn-enroll-sm enroll-student" 
-                                                        data-student-id="<?= $student['id'] ?>"
-                                                        data-student-name="<?= htmlspecialchars($student['fname'] . ' ' . $student['lname']) ?>"
-                                                        data-course-id="<?= $courseId ?>">
-                                                    <i class="fas fa-user-plus"></i> Enroll
-                                                </button>
-                                            </td>
                                         </tr>
                                         <?php endforeach; ?>
                                     </tbody>
                                 </table>
                             </div>
                             
-                            <div class="mt-2 text-muted small">
-                                <span id="availableCount"><?= count($availableStudents) ?></span> students available
+                            <div class="mt-2 d-flex justify-content-between align-items-center">
+                                <div>
+                                    <span id="availableCount"><?= count($availableStudents) ?></span> students available
+                                    <span id="selectedAvailableCount" class="ms-2 badge bg-primary" style="display: none;">0 selected</span>
+                                </div>
+                                <button class="btn-view-enrollees" id="enrollSelectedBtn" onclick="enrollSelectedStudents()" style="background: #28a745;">
+                                    <i class="fas fa-user-plus"></i> Enroll Selected (<span id="enrollCount">0</span>)
+                                </button>
                             </div>
                         <?php else: ?>
                             <div class="empty-state" style="padding: 2rem;">
@@ -1533,15 +683,97 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <div>
-                    <!-- Enroll New Button on the left -->
-                    <button class="btn-view-enrollees" id="enrollNewBtn" onclick="toggleEnrollSection()" style="background: #28a745;">
-                        <i class="fas fa-user-plus"></i> Enroll New
-                    </button>
+                <div class="d-flex justify-content-between w-100">
+                    <div>
+                        <!-- Enroll New Button on the left -->
+                        <button class="btn-view-enrollees" id="enrollNewBtn" onclick="toggleEnrollSection()" style="background: #28a745;">
+                            <i class="fas fa-user-plus"></i> Enroll New
+                        </button>
+                        <!-- Generate Report Button -->
+                        <button class="btn-view-enrollees ms-2" onclick="showReportModal()" style="background: #1661a3;">
+                            <i class="fas fa-file-alt"></i> Generate Report
+                        </button>
+                    </div>
+                    <div>
+                        <!-- No close button here anymore -->
+                    </div>
                 </div>
-                <div>
-                    <!-- No close button here anymore -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Report Modal -->
+<div class="modal fade" id="reportModal" tabindex="-1" aria-labelledby="reportModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header" style="background: #1661a3;">
+                <h5 class="modal-title" id="reportModalLabel">
+                    <i class="fas fa-file-alt me-2"></i>
+                    Student Report - <?= htmlspecialchars($course['title']) ?>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Report Table -->
+                <div class="table-responsive">
+                    <table class="table" id="reportTable">
+                        <thead>
+                            <tr>
+                                <th>Student</th>
+                                <th>Score</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="reportTableBody">
+                            <?php foreach($enrolledStudents as $student): 
+                                // Determine if student should be marked as completed
+                                $isPdfComplete = ($student['pages_viewed'] >= $course['total_pages']);
+                                $isAssessmentPassed = ($student['assessment_status'] === 'Passed');
+                                
+                                // Completion logic: PDF complete AND (no assessment OR assessment passed)
+                                $shouldBeCompleted = $isPdfComplete && (!$assessment || $isAssessmentPassed);
+                                
+                                // Override status if conditions are met
+                                $displayStatus = $shouldBeCompleted ? 'Completed' : $student['status_text'];
+                            ?>
+                            <tr>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <div class="student-avatar me-2" style="width: 30px; height: 30px; font-size: 0.7rem;">
+                                            <?= strtoupper(substr($student['fname'] ?? '', 0, 1) . substr($student['lname'] ?? '', 0, 1)) ?>
+                                        </div>
+                                        <div>
+                                            <strong><?= htmlspecialchars($student['fname'] ?? '') ?> <?= htmlspecialchars($student['lname'] ?? '') ?></strong>
+                                            <small class="d-block text-muted"><?= htmlspecialchars($student['email'] ?? '') ?></small>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <?php if($student['latest_score']): ?>
+                                        <strong class="<?= $student['latest_score'] >= ($assessment['passing_score'] ?? 0) ? 'text-success' : 'text-danger' ?>">
+                                            <?= $student['latest_score'] ?>%
+                                        </strong>
+                                    <?php else: ?>
+                                        <span class="text-muted">—</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td>
+                                    <span class="status-badge <?= $shouldBeCompleted ? 'badge-completed' : ($student['status'] === 'ongoing' ? 'badge-ongoing' : 'badge-expired') ?>">
+                                        <?= $displayStatus ?>
+                                    </span>
+                                </td>
+                            </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
                 </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn-view-enrollees" onclick="downloadCSV()" style="background: #28a745;">
+                    <i class="fas fa-download"></i> Download CSV
+                </button>
             </div>
         </div>
     </div>
@@ -2354,6 +1586,158 @@ function toggleEnrollSection() {
         enrollBtn.innerHTML = '<i class="fas fa-user-plus"></i> Enroll New';
         enrollBtn.style.background = '#28a745';
     }
+}
+
+// Toggle all available checkboxes
+function toggleAllAvailable() {
+    const selectAll = document.getElementById('selectAllAvailable').checked;
+    document.querySelectorAll('.available-checkbox').forEach(cb => {
+        cb.checked = selectAll;
+    });
+    updateSelectedAvailableCount();
+}
+
+// Update selected count
+function updateSelectedAvailableCount() {
+    const count = document.querySelectorAll('.available-checkbox:checked').length;
+    document.getElementById('enrollCount').textContent = count;
+    
+    const badge = document.getElementById('selectedAvailableCount');
+    if (count > 0) {
+        badge.style.display = 'inline';
+        badge.textContent = count + ' selected';
+    } else {
+        badge.style.display = 'none';
+    }
+}
+
+// Add change event to available checkboxes
+$(document).on('change', '.available-checkbox', function() {
+    updateSelectedAvailableCount();
+    
+    // Update select all checkbox
+    const totalCheckboxes = document.querySelectorAll('.available-checkbox').length;
+    const checkedCheckboxes = document.querySelectorAll('.available-checkbox:checked').length;
+    document.getElementById('selectAllAvailable').checked = totalCheckboxes === checkedCheckboxes;
+});
+
+// Make rows clickable to toggle checkbox
+$(document).on('click', '.available-checkbox-row', function(e) {
+    if (e.target.type === 'checkbox') return;
+    const checkbox = $(this).find('.available-checkbox')[0];
+    if (checkbox) {
+        checkbox.checked = !checkbox.checked;
+        $(checkbox).trigger('change');
+    }
+});
+
+// Enroll selected students
+function enrollSelectedStudents() {
+    const selectedIds = [];
+    document.querySelectorAll('.available-checkbox:checked').forEach(cb => {
+        selectedIds.push(cb.value);
+    });
+    
+    if (selectedIds.length === 0) {
+        showModalToast('info', 'No students selected');
+        return;
+    }
+    
+    if (!confirm(`Enroll ${selectedIds.length} selected student(s)?`)) return;
+    
+    const button = $('#enrollSelectedBtn');
+    const originalText = button.html();
+    button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Enrolling...');
+    
+    // Create a form to submit multiple enrollments
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.style.display = 'none';
+    
+    // Add all selected IDs
+    selectedIds.forEach(id => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'enroll_ids[]';
+        input.value = id;
+        form.appendChild(input);
+    });
+    
+    // Add action and course_id
+    const actionInput = document.createElement('input');
+    actionInput.type = 'hidden';
+    actionInput.name = 'action';
+    actionInput.value = 'enroll_multiple';
+    form.appendChild(actionInput);
+    
+    const courseInput = document.createElement('input');
+    courseInput.type = 'hidden';
+    courseInput.name = 'course_id';
+    courseInput.value = '<?= $courseId ?>';
+    form.appendChild(courseInput);
+    
+    document.body.appendChild(form);
+    form.submit();
+}
+
+// Show report modal
+function showReportModal() {
+    $('#reportModal').modal('show');
+}
+
+// Download CSV
+function downloadCSV() {
+    // Get data from the report table
+    const rows = [];
+    const headers = ['Student', 'Score', 'Status'];
+    rows.push(headers.join(','));
+    
+    // Get data rows (only visible rows, respecting search filter)
+    const visibleRows = document.querySelectorAll('#enrolledTable tbody tr:not([style*="display: none"])');
+    
+    visibleRows.forEach(row => {
+        const studentName = row.querySelector('td:nth-child(2) strong').textContent;
+        const studentEmail = row.querySelector('td:nth-child(2) small').textContent;
+        const score = row.querySelector('td:nth-child(5)')?.textContent.trim() || '—';
+        const status = row.querySelector('td:nth-child(6) .status-badge').textContent.trim();
+        
+        // Combine name and email for the Student column
+        const student = `${studentName} (${studentEmail})`;
+        
+        // Clean up data
+        const cleanStudent = student.replace(/,/g, ''); // Remove commas to avoid CSV issues
+        const cleanScore = score.replace('%', '');
+        const cleanStatus = status.replace(/\s+/g, ' ').trim();
+        
+        rows.push(`"${cleanStudent}",${cleanScore},"${cleanStatus}"`);
+    });
+    
+    if (rows.length === 1) {
+        showModalToast('info', 'No data to export');
+        return;
+    }
+    
+    // Create CSV content
+    const csvContent = rows.join('\n');
+    
+    // Create download link
+    const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    
+    // Get current date for filename
+    const date = new Date();
+    const dateStr = date.toISOString().split('T')[0];
+    const filename = `student_report_<?= $courseId ?>_${dateStr}.csv`;
+    
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    
+    showModalToast('success', `Report downloaded with ${visibleRows.length} students`);
 }
 
 // Select Multiple Mode Functions

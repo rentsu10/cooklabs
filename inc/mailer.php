@@ -23,7 +23,7 @@ function sendOTPEmail($recipientEmail, $recipientName, $otpCode) {
         $mail->Port       = 587; // TLS: 587, SSL: 465
         
         // sender and recipient
-        $mail->setFrom('learningmanagement576@gmail.com', 'LMS');
+        $mail->setFrom('learningmanagement576@gmail.com', 'CookLabs');
         $mail->addAddress($recipientEmail, $recipientName);
         
         // Content

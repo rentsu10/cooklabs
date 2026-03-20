@@ -10,7 +10,7 @@ if(!defined('BASE_URL')) {
     define('BASE_URL', $protocol . $_SERVER['HTTP_HOST'] . '/lms');
 }
 
-// Function to get role icon - WITH DEFAULT VALUE
+// Function to get role icon
 function get_role_icon($role = '') {
     $icons = [
         'superadmin' => 'fa-user-tie',
@@ -21,6 +21,8 @@ function get_role_icon($role = '') {
     return $icons[$role] ?? 'fa-user';
 }
 
+// Note: get_role_display_name() is already defined in profile.php
+// We'll use that function directly
 ?>
 
 <!doctype html>
@@ -75,7 +77,14 @@ function get_role_icon($role = '') {
                                  <?= htmlspecialchars($u['lname'] ?? '') ?>
                             </h6>
                             <small>
-                                <?= htmlspecialchars(ucfirst($u['role'] ?? 'Guest')) ?>
+                                <?php 
+                                // Use the function from profile.php
+                                if (function_exists('get_role_display_name')) {
+                                    echo htmlspecialchars(get_role_display_name($u['role'] ?? 'Guest'));
+                                } else {
+                                    echo htmlspecialchars(ucfirst($u['role'] ?? 'Guest'));
+                                }
+                                ?>
                             </small>
                         </div>
                     </a>
