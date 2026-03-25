@@ -335,7 +335,7 @@ function get_author_name($item) {
                             <div class="alarm-clock-container" style="height: 100%; display: flex; flex-direction: column; justify-content: center;">
                                 <div class="alarm-clock-face">
                                     <div class="alarm-time" id="alarmTime" style="color: #4fc3ff; text-shadow: 0 0 8px #1e88e5, 0 0 2px #0d47a1;">00:00:00</div>
-                                    <div class="alarm-date" id="alarmDate">SYSTEM TIME · COOKLABS 2026</div>
+                                    <div class="alarm-date">SYSTEM TIME · COOKLABS 2026</div>
                                 </div>
                                 <div class="alarm-buttons">
                                     <div class="alarm-btn alarm-btn-red" title="Snooze"></div>
