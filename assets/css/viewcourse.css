@@ -989,3 +989,92 @@
 .w-100 {
     width: 100%;
 }
+
+/* Archive Button Styles - Similar to danger button but with amber/warning colors */
+.btn-archive {
+    background: #ffc107;
+    border: 2px solid #b88f1f;
+    box-shadow: 2px 2px 0 #8b6915;
+    color: #ffffff;
+    padding: 0.3rem 0.8rem;
+    font-size: 0.75rem;
+    border-radius: 0px;
+    cursor: pointer;
+    transition: all 0.1s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    border: none;
+}
+
+.btn-archive:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: 6px 6px 0 #8b6915;
+    background: #e0a800;
+    color: #07223b;
+}
+
+/* Small Archive Button for table actions */
+.btn-archive-sm {
+    background: #ffc107;
+    border: 2px solid #b88f1f;
+    box-shadow: 2px 2px 0 #8b6915;
+    padding: 0.3rem 0.8rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #07223b;
+    cursor: pointer;
+    transition: all 0.1s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    border-radius: 0px;
+}
+
+.btn-archive-sm:hover {
+    transform: translate(-1px, -1px);
+    box-shadow: 3px 3px 0 #8b6915;
+    background: #e0a800;
+    color: #07223b;
+}
+
+.btn-archive-sm i {
+    margin-right: 2px;
+}
+
+/* Archive button in batch action bar */
+.btn-archive.batch-archive {
+    background: #ffc107;
+    border: 3px solid #b88f1f;
+    box-shadow: 4px 4px 0 #8b6915;
+    color: #07223b;
+}
+
+.btn-archive.batch-archive:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: 6px 6px 0 #8b6915;
+    background: #e0a800;
+}
+
+.selected-row {
+    background-color: #fff3cd !important;
+}
+
+.clickable {
+    cursor: pointer;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+.modal-toast {
+    animation: slideIn 0.3s ease;
+}

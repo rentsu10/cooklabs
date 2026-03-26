@@ -24,34 +24,82 @@ $createdAt = $userData['created_at'] ?? null;
 // Fetch all courses with enrollment info for current user
 $stmt = $pdo->prepare("
     SELECT c.id, c.title, c.description, c.thumbnail, c.file_pdf, c.file_video,
-           e.status AS enroll_status, e.progress
+           e.status AS enroll_status, e.progress, e.completed_at, e.is_archived,
+           a.passing_score,
+           (
+               SELECT aa.score 
+               FROM assessment_attempts aa 
+               WHERE aa.assessment_id = a.id 
+               AND aa.user_id = ? 
+               AND aa.status = 'completed'
+               ORDER BY aa.completed_at DESC 
+               LIMIT 1
+           ) as latest_score,
+           CASE 
+               WHEN a.id IS NOT NULL THEN
+                   CASE 
+                       WHEN EXISTS (
+                           SELECT 1 
+                           FROM assessment_attempts aa 
+                           WHERE aa.assessment_id = a.id 
+                           AND aa.user_id = ? 
+                           AND aa.status = 'completed'
+                           AND aa.score >= a.passing_score
+                       ) THEN 1
+                       ELSE 0
+                   END
+               ELSE 0
+           END AS assessment_passed
     FROM courses c
     LEFT JOIN enrollments e ON e.course_id = c.id AND e.user_id = ?
+    LEFT JOIN assessments a ON a.course_id = c.id
     WHERE c.is_active = 1
-    ORDER BY c.id DESC
+    ORDER BY e.completed_at DESC
 ");
 
-$stmt->execute([$userId]);
- $courses = $stmt->fetchAll(PDO::FETCH_ASSOC);
+$stmt->execute([$userId, $userId, $userId]);
+$courses = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Calculate counters
-$counter = ['ongoing' => 0, 'completed' => 0, 'not_enrolled' => 0];
-foreach ($courses as $c) {
-    if (!$c['enroll_status']) $counter['not_enrolled']++;
-    elseif ($c['enroll_status'] === 'ongoing') $counter['ongoing']++;
-    elseif ($c['enroll_status'] === 'completed') $counter['completed']++;
+$counter = ['ongoing' => 0, 'completed' => 0, 'not_enrolled' => 0, 'archived' => 0];
+$archivedCourses = [];
 
+foreach ($courses as $c) {
+    if ($c['is_archived'] == 1) {
+        $counter['archived']++;
+        // Only add to archived courses if they have a completed_at date or assessment passed
+        if ($c['completed_at'] || $c['assessment_passed']) {
+            $archivedCourses[] = $c;
+        }
+    } elseif (!$c['enroll_status']) {
+        $counter['not_enrolled']++;
+    } elseif ($c['enroll_status'] === 'ongoing') {
+        $counter['ongoing']++;
+    } elseif ($c['enroll_status'] === 'completed') {
+        $counter['completed']++;
+    }
 }
 
-// Function to get role display name
-function get_role_display_name($role) {
-    $roles = [
-        'superadmin' => 'SuperAdmin',
-        'admin' => 'Admin',
-        'proponent' => 'Instructor',
-        'user' => 'Student',
-    ];
-    return $roles[$role] ?? ucfirst($role);
+// Function to get medal icon based on score
+function getMedalIcon($score, $passed) {
+    
+    if ($score >= 90 && $passed) {
+        return '<i class="fas fa-medal" style="color: #f4c429;"></i>';
+    } elseif ($score >= 80) {
+        return '<i class="fas fa-medal" style="color: #c0c0c0;"></i>';
+    } elseif ($score >= 70) {
+        return '<i class="fas fa-medal" style="color: #945618;"></i>';
+    } else {
+        return '<i class="fas fa-certificate" style="color: #1d6fb0;"></i>';
+    }
+}
+
+// Function to format date
+function formatBadgeDate($date) {
+    if (!$date || $date == '0000-00-00 00:00:00') {
+        return 'Date unknown';
+    }
+    return date('M d, Y', strtotime($date));
 }
 ?>
 <!doctype html>
@@ -92,57 +140,112 @@ function get_role_display_name($role) {
         <p>View and manage your account information</p>
     </div>
 
-    <div class="profile-card">
-        <!-- Avatar - CIRCLE with role-based color -->
-        <div class="profile-avatar <?= strtolower(trim($u['role'] ?? 'user')) ?>">
-            <?php
-            $initials = 'U';
-            if(isset($u['fname']) && !empty($u['fname'])) {
-                $initials = '';
-                $nameParts = explode(' ', $u['fname'] . ' ' . ($u['lname'] ?? ''));
-                foreach($nameParts as $part) {
-                    if(!empty(trim($part))) {
-                        $initials .= strtoupper(substr($part, 0, 1));
+    <div class="two-column-layout">
+        <!-- LEFT COLUMN - Profile Info (70%) -->
+        <div class="profile-left">
+            <div class="profile-card">
+                <!-- Avatar - CIRCLE with role-based color -->
+                <div class="profile-avatar <?= strtolower(trim($u['role'] ?? 'user')) ?>">
+                    <?php
+                    $initials = 'U';
+                    if(isset($u['fname']) && !empty($u['fname'])) {
+                        $initials = '';
+                        $nameParts = explode(' ', $u['fname'] . ' ' . ($u['lname'] ?? ''));
+                        foreach($nameParts as $part) {
+                            if(!empty(trim($part))) {
+                                $initials .= strtoupper(substr($part, 0, 1));
+                            }
+                            if(strlen($initials) >= 2) break;
+                        }
                     }
-                    if(strlen($initials) >= 2) break;
-                }
-            }
-            echo $initials ?: 'U';
-            ?>
-        </div>
+                    echo $initials ?: 'U';
+                    ?>
+                </div>
 
-        <!-- Basic Info -->
-        <div class="user-info">
-            <h2 class="user-name"><?= htmlspecialchars($u['fname'] . ' ' . ($u['lname'] ?? '')) ?></h2>
-            
-            <!-- Role badge - NO EDGES with role-based color -->
-            <div class="user-role <?= strtolower(trim($u['role'] ?? 'user')) ?>">
-                <?= htmlspecialchars(get_role_display_name($u['role'] ?? '')) ?>
+                <!-- Basic Info -->
+                <div class="user-info">
+                    <h2 class="user-name"><?= htmlspecialchars($u['fname'] . ' ' . ($u['lname'] ?? '')) ?></h2>
+                    
+                    <!-- Role badge -->
+                    <div class="user-role <?= strtolower(trim($u['role'] ?? 'user')) ?>">
+                        <?= htmlspecialchars(get_role_display_name($u['role'] ?? '')) ?>
+                    </div>
+                    
+                    <p class="user-email">
+                        <i class="fas fa-envelope"></i>
+                        <?= htmlspecialchars($u['email'] ?? 'No email provided') ?>
+                    </p>
+                    <p class="member-since">
+                        <i class="fas fa-calendar-alt"></i>
+                        Member since: 
+                        <?php 
+                        if($createdAt && !empty($createdAt)) {
+                            echo date('F j, Y', strtotime($createdAt));
+                        } else {
+                            echo 'Unknown';
+                        }
+                        ?>
+                    </p>
+                </div>
+
+                <!-- Edit Profile Button -->
+                <a href="<?= BASE_URL ?>/public/edit_profile.php" class="modern-btn-warning">  
+                    <i class="fas fa-edit"></i> Edit Profile
+                </a>
             </div>
-            
-            <p class="user-email">
-                <i class="fas fa-envelope"></i>
-                <?= htmlspecialchars($u['email'] ?? 'No email provided') ?>
-            </p>
-            <p class="member-since">
-                <i class="fas fa-calendar-alt"></i>
-                Member since: 
-                <?php 
-                if($createdAt && !empty($createdAt)) {
-                    echo date('F j, Y', strtotime($createdAt));
-                } else {
-                    echo 'Unknown';
-                }
-                ?>
-            </p>
         </div>
 
-        <!-- STATS CARDS REMOVED -->
+        <!-- RIGHT COLUMN - Badge Panel (30%) -->
+        <div class="profile-right">
+            <div class="badge-panel">
+                <div class="badge-header">
+                    <h3>
+                        <i class="fas fa-award" style="color: #ffc107;"></i> 
+                        Achievement Badges
+                        <span class="badge-count"><?= count($archivedCourses) ?></span>
+                    </h3>
+                    <p>Earned from completed courses</p>
+                </div>
 
-        <!-- Edit Profile Button -->
-        <a href="<?= BASE_URL ?>/public/edit_profile.php" class="modern-btn-warning">  
-            <i class="fas fa-edit"></i> Edit Profile
-        </a>
+                <div class="badge-list">
+                    <?php if(count($archivedCourses) > 0): ?>
+                        <?php foreach($archivedCourses as $badge): 
+                            $score = $badge['latest_score'] ?? null;
+                            $passed = $badge['assessment_passed'] ?? false;
+                            $medalIcon = getMedalIcon($score, $passed);
+                            $acquiredDate = $badge['completed_at'] ?: ($badge['is_archived'] ? $badge['completed_at'] : null);
+                        ?>
+                        <div class="badge-item">
+                            <div class="badge-icon">
+                                <?= $medalIcon ?>
+                            </div>
+                            <div class="badge-info">
+                                <div class="badge-title"><?= htmlspecialchars($badge['title']) ?></div>
+                                <?php if($score): ?>
+                                    <div class="badge-score">
+                                        Score: <?= $score ?>% 
+                                        <?php if($passed): ?>
+                                            <span style="color: #28a745;">✓ Passed</span>
+                                        <?php endif; ?>
+                                    </div>
+                                <?php endif; ?>
+                                <div class="badge-date">
+                                    <i class="fas fa-calendar-check"></i>
+                                    <?= formatBadgeDate($acquiredDate) ?>
+                                </div>
+                            </div>
+                        </div>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <div class="no-badges">
+                            <i class="fas fa-medal"></i>
+                            <p>No badges earned yet</p>
+                            <small>Complete courses to earn achievement badges</small>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Kitchen accent line -->

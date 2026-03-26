@@ -36,7 +36,7 @@
     $isCourseExpired = (!empty($course['expires_at']) && $today > $course['expires_at']);
 
     // ============================================
-    // FETCH ENROLLED STUDENTS - WITH ASSESSMENT SCORES
+    // FETCH ENROLLED STUDENTS - WITH ASSESSMENT SCORES (EXCLUDING ARCHIVED)
     // ============================================
 
     // 1. ALL enrolled students with their assessment info (excluding archived)
@@ -206,6 +206,70 @@
         exit;
     }
 
+    // Handle AJAX request to archive individual student
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'archive_student') {
+        $studentId = intval($_POST['student_id'] ?? 0);
+        $courseId = intval($_POST['course_id'] ?? 0);
+        
+        if ($studentId && $courseId && (is_admin() || $course['proponent_id'] == $u['id'])) {
+            try {
+                $stmt = $pdo->prepare("
+                    UPDATE enrollments 
+                    SET is_archived = 1 
+                    WHERE user_id = ? AND course_id = ? AND is_archived = 0
+                ");
+                $stmt->execute([$studentId, $courseId]);
+                
+                if ($stmt->rowCount() > 0) {
+                    echo json_encode(['success' => true, 'message' => 'Student archived successfully']);
+                } else {
+                    echo json_encode(['success' => false, 'message' => 'Student already archived or not found']);
+                }
+            } catch (Exception $e) {
+                echo json_encode(['success' => false, 'message' => 'Error archiving student: ' . $e->getMessage()]);
+            }
+        } else {
+            echo json_encode(['success' => false, 'message' => 'Invalid parameters or insufficient permissions']);
+        }
+        exit;
+    }
+
+    // Handle AJAX request to archive multiple selected students
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'archive_multiple') {
+        $courseId = intval($_POST['course_id'] ?? 0);
+        $studentIds = $_POST['student_ids'] ?? [];
+        
+        if (!empty($studentIds) && $courseId && (is_admin() || $course['proponent_id'] == $u['id'])) {
+            try {
+                $pdo->beginTransaction();
+                $archived = 0;
+                
+                foreach ($studentIds as $studentId) {
+                    $studentId = intval($studentId);
+                    $stmt = $pdo->prepare("
+                        UPDATE enrollments 
+                        SET is_archived = 1 
+                        WHERE user_id = ? AND course_id = ? AND is_archived = 0
+                    ");
+                    $stmt->execute([$studentId, $courseId]);
+                    if ($stmt->rowCount() > 0) {
+                        $archived++;
+                    }
+                }
+                
+                $pdo->commit();
+                
+                echo json_encode(['success' => true, 'message' => "$archived student(s) archived successfully"]);
+            } catch (Exception $e) {
+                $pdo->rollBack();
+                echo json_encode(['success' => false, 'message' => 'Error archiving students: ' . $e->getMessage()]);
+            }
+        } else {
+            echo json_encode(['success' => false, 'message' => 'Invalid parameters or insufficient permissions']);
+        }
+        exit;
+    }
+
     // Handle AJAX request to enroll student
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'enroll_student') {
         $studentId = intval($_POST['student_id'] ?? 0);
@@ -214,7 +278,7 @@
         if ($studentId && $courseId && (is_admin() || $course['proponent_id'] == $u['id'])) {
             try {
                 // Check if already enrolled
-                $stmt = $pdo->prepare("SELECT id FROM enrollments WHERE user_id = ? AND course_id = ?");
+                $stmt = $pdo->prepare("SELECT id FROM enrollments WHERE user_id = ? AND course_id = ? AND is_archived = 0");
                 $stmt->execute([$studentId, $courseId]);
                 
                 if (!$stmt->fetch()) {
@@ -249,7 +313,7 @@
                 $stmt = $pdo->prepare("
                     UPDATE enrollments 
                     SET is_archived = 1 
-                    WHERE course_id = ? AND status = 'completed'
+                    WHERE course_id = ? AND status = 'completed' AND is_archived = 0
                 ");
                 $stmt->execute([$courseId]);
                 
@@ -282,7 +346,7 @@
                     $stmt = $pdo->prepare("
                         UPDATE enrollments 
                         SET is_archived = 1 
-                        WHERE course_id = ? AND status = 'completed'
+                        WHERE course_id = ? AND status = 'completed' AND is_archived = 0
                     ");
                     $stmt->execute([$courseId]);
                     $archivedCount = $stmt->rowCount();
@@ -291,7 +355,7 @@
                     $stmt = $pdo->prepare("
                         UPDATE enrollments 
                         SET status = 'expired' 
-                        WHERE course_id = ? AND status = 'ongoing'
+                        WHERE course_id = ? AND status = 'ongoing' AND is_archived = 0
                     ");
                     $stmt->execute([$courseId]);
                     $expiredCount = $stmt->rowCount();
@@ -314,114 +378,114 @@
         }
         exit;
     }
+    
     // Handle AJAX request to enroll multiple students
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'enroll_multiple') {
-    session_start();
-    $courseId = intval($_POST['course_id'] ?? 0);
-    $studentIds = $_POST['enroll_ids'] ?? [];
-    
-    if (!empty($studentIds) && $courseId && (is_admin() || $course['proponent_id'] == $u['id'])) {
-        try {
-            $pdo->beginTransaction();
-            $enrolled = 0;
-            $skipped = 0;
-            
-            foreach ($studentIds as $studentId) {
-                $studentId = intval($studentId);
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'enroll_multiple') {
+        session_start();
+        $courseId = intval($_POST['course_id'] ?? 0);
+        $studentIds = $_POST['enroll_ids'] ?? [];
+        
+        if (!empty($studentIds) && $courseId && (is_admin() || $course['proponent_id'] == $u['id'])) {
+            try {
+                $pdo->beginTransaction();
+                $enrolled = 0;
+                $skipped = 0;
                 
-                // Check if already enrolled
-                $stmt = $pdo->prepare("SELECT id FROM enrollments WHERE user_id = ? AND course_id = ?");
-                $stmt->execute([$studentId, $courseId]);
-                
-                if (!$stmt->fetch()) {
-                    // Create enrollment
-                    $stmt = $pdo->prepare('
-                        INSERT INTO enrollments 
-                        (user_id, course_id, enrolled_at, status, progress) 
-                        VALUES (?, ?, NOW(), "ongoing", 0)
-                    ');
+                foreach ($studentIds as $studentId) {
+                    $studentId = intval($studentId);
+                    
+                    // Check if already enrolled
+                    $stmt = $pdo->prepare("SELECT id FROM enrollments WHERE user_id = ? AND course_id = ? AND is_archived = 0");
                     $stmt->execute([$studentId, $courseId]);
-                    $enrolled++;
-                } else {
-                    $skipped++;
+                    
+                    if (!$stmt->fetch()) {
+                        // Create enrollment
+                        $stmt = $pdo->prepare('
+                            INSERT INTO enrollments 
+                            (user_id, course_id, enrolled_at, status, progress) 
+                            VALUES (?, ?, NOW(), "ongoing", 0)
+                        ');
+                        $stmt->execute([$studentId, $courseId]);
+                        $enrolled++;
+                    } else {
+                        $skipped++;
+                    }
                 }
+                
+                $pdo->commit();
+                
+                // Set success message
+                $_SESSION['success'] = "$enrolled student(s) enrolled successfully";
+                if ($skipped > 0) {
+                    $_SESSION['warning'] = "$skipped student(s) were already enrolled";
+                }
+                
+            } catch (Exception $e) {
+                $pdo->rollBack();
+                $_SESSION['error'] = 'Error enrolling students: ' . $e->getMessage();
             }
-            
-            $pdo->commit();
-            
-            // Set success message
-            $_SESSION['success'] = "$enrolled student(s) enrolled successfully";
-            if ($skipped > 0) {
-                $_SESSION['warning'] = "$skipped student(s) were already enrolled";
-            }
-            
-        } catch (Exception $e) {
-            $pdo->rollBack();
-            $_SESSION['error'] = 'Error enrolling students: ' . $e->getMessage();
+        } else {
+            $_SESSION['error'] = 'Invalid parameters or insufficient permissions';
         }
-    } else {
-        $_SESSION['error'] = 'Invalid parameters or insufficient permissions';
+        
+        // Redirect back to the same page with the modal open
+        header('Location: ' . $_SERVER['PHP_SELF'] . '?id=' . $courseId . '#enrolleesModal');
+        exit;
     }
-    
-    // Redirect back to the same page with the modal open
-    header('Location: ' . $_SERVER['PHP_SELF'] . '?id=' . $courseId . '#enrolleesModal');
-    exit;
-}
+?>
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title><?=htmlspecialchars($course['title'])?> - CookLabs LMS</title>
+    <link rel="icon" type="image/png" href="../uploads/images/cooklabs-mini-logo.png">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../assets/css/viewcourse.css">
+</head>
+<body>
+    <!-- Sidebar -->
+    <div class="lms-sidebar-container">
+        <?php include __DIR__ . '/../inc/sidebar.php'; ?>
+    </div>
 
-    ?>
-    <!doctype html>
-    <html lang="en">
-    <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title><?=htmlspecialchars($course['title'])?> - CookLabs LMS</title>
-        <link rel="icon" type="image/png" href="../uploads/images/cooklabs-mini-logo.png">
-        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-        <link rel="preconnect" href="https://fonts.googleapis.com">
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
-        <link rel="stylesheet" href="../assets/css/viewcourse.css">
-    </head>
-    <body>
-        <!-- Sidebar -->
-        <div class="lms-sidebar-container">
-            <?php include __DIR__ . '/../inc/sidebar.php'; ?>
+    <!-- Main Content -->
+    <div class="course-content-wrapper" id="mainContent">
+        <!-- Course Header -->
+        <div class="course-header">
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+                <div style="flex: 1;">
+                    <h3><?=htmlspecialchars($course['title'])?></h3>
+                    <p><?=nl2br(htmlspecialchars($course['description']))?></p>
+                </div>
+            </div>
         </div>
 
-        <!-- Main Content -->
-        <div class="course-content-wrapper" id="mainContent">
-            <!-- Course Header -->
-            <div class="course-header">
-                <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
-                    <div style="flex: 1;">
-                        <h3><?=htmlspecialchars($course['title'])?></h3>
-                        <p><?=nl2br(htmlspecialchars($course['description']))?></p>
+        <!-- Instructor Info -->
+        <div class="course-info-card">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                <div class="course-instructor">
+                    <div class="instructor-avatar">
+                        <?= substr($course['fname'] ?? 'I', 0, 1) . substr($course['lname'] ?? 'nstructor', 0, 1) ?>
+                    </div>
+                    <div class="instructor-info">
+                        <h5><?= htmlspecialchars($course['fname'] ?? 'Instructor') ?> <?= htmlspecialchars($course['lname'] ?? '') ?></h5>
+                        <p>Course Instructor</p>
                     </div>
                 </div>
+                
+                <!-- Button to toggle List of enrollees - Only for proponent/admin -->
+                <?php if($canViewEnrollees): ?>
+                <button class="btn-view-enrollees" type="button" data-bs-toggle="modal" data-bs-target="#enrolleesModal">
+                    <i class="fas fa-users"></i> View Enrollees (<?= $stats['total_enrolled'] ?? 0 ?>)
+                </button>
+                <?php endif; ?>
             </div>
-
-            <!-- Instructor Info -->
-            <div class="course-info-card">
-                <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
-                    <div class="course-instructor">
-                        <div class="instructor-avatar">
-                            <?= substr($course['fname'] ?? 'I', 0, 1) . substr($course['lname'] ?? 'nstructor', 0, 1) ?>
-                        </div>
-                        <div class="instructor-info">
-                            <h5><?= htmlspecialchars($course['fname'] ?? 'Instructor') ?> <?= htmlspecialchars($course['lname'] ?? '') ?></h5>
-                            <p>Course Instructor</p>
-                        </div>
-                    </div>
-                    
-                    <!-- Button to toggle List of enrollees - Only for proponent/admin -->
-                    <?php if($canViewEnrollees): ?>
-                    <button class="btn-view-enrollees" type="button" data-bs-toggle="modal" data-bs-target="#enrolleesModal">
-                        <i class="fas fa-users"></i> View Enrollees (<?= $stats['total_enrolled'] ?? 0 ?>)
-                    </button>
-                    <?php endif; ?>
-                </div>
-            </div>
+        </div>
 
 <!-- Enrollees Modal (with split layout) - Only shown if user has permission -->
 <?php if($canViewEnrollees): ?>
@@ -475,7 +539,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                             <div class="table-responsive" id="enrolledTableContainer">
                                 <table class="table" id="enrolledTable">
                                     <thead>
-                                        <tr>
+                                        32
                                             <th class="select-checkbox" style="display: none; width: 40px;">
                                                 <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll()">
                                             </th>
@@ -484,7 +548,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                                             <th>Assessment</th>
                                             <th>Score</th>
                                             <th>Status</th>
-                                            <th>Action</th>
+                                            <th>Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -558,11 +622,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                                                 </span>
                                             </td>
                                             <td class="action-cell">
-                                                <button class="btn-drop drop-student single-action" 
+                                                <button class="btn-drop drop-student" 
+                                                        data-student-id="<?= $student['id'] ?>"
+                                                        data-student-name="<?= htmlspecialchars($student['fname'] . ' ' . $student['lname']) ?>"
+                                                        data-course-id="<?= $courseId ?>"
+                                                        style="margin-right: 5px;">
+                                                    <i class="fas fa-user-minus"></i> Drop
+                                                </button>
+                                                <button class="btn-archive archive-student" 
                                                         data-student-id="<?= $student['id'] ?>"
                                                         data-student-name="<?= htmlspecialchars($student['fname'] . ' ' . $student['lname']) ?>"
                                                         data-course-id="<?= $courseId ?>">
-                                                    <i class="fas fa-user-minus"></i> Drop
+                                                    <i class="fas fa-archive"></i> Archive
                                                 </button>
                                             </td>
                                         </tr>
@@ -703,6 +774,68 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     </div>
 </div>
 
+<!-- Archive Confirmation Modal -->
+<div class="modal fade" id="archiveConfirmModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header" style="background: #ffc107;">
+                <h5 class="modal-title">
+                    <i class="fas fa-archive"></i> Confirm Archive Student
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to archive <strong id="archiveStudentName"></strong> from this course?</p>
+                <p class="text-warning small">
+                    <i class="fas fa-info-circle"></i> 
+                    Archiving will:
+                </p>
+                <ul class="text-warning small">
+                    <li>Hide this student from the enrolled list</li>
+                    <li>Remove them from available students for enrollment</li>
+                    <li>Keep their progress and assessment data for records</li>
+                </ul>
+                <p class="text-warning small">You cannot undo this action directly, but you can re-enroll them if needed.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn-danger" id="confirmArchiveBtn" style="background: #ffc107; border-color: #b88f1f; color: #07223b;">Yes, Archive Student</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Drop Confirmation Modal -->
+<div class="modal fade" id="dropConfirmModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header" style="background: #dc3545;">
+                <h5 class="modal-title">
+                    <i class="fas fa-exclamation-triangle"></i> Confirm Drop Student
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to drop <strong id="dropStudentName"></strong> from this course?</p>
+                <p class="text-danger small">
+                    <i class="fas fa-info-circle"></i> 
+                    This will permanently remove:
+                </p>
+                <ul class="text-danger small">
+                    <li>Their enrollment record</li>
+                    <li>All PDF progress</li>
+                    <li>All assessment attempts and answers</li>
+                </ul>
+                <p class="text-danger small">This action cannot be undone!</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn-danger" id="confirmDropBtn">Yes, Drop Student</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Report Modal -->
 <div class="modal fade" id="reportModal" tabindex="-1" aria-labelledby="reportModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
@@ -719,7 +852,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 <div class="table-responsive">
                     <table class="table" id="reportTable">
                         <thead>
-                            <tr>
+                            32
                                 <th>Student</th>
                                 <th>Score</th>
                                 <th>Status</th>
@@ -779,351 +912,262 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     </div>
 </div>
 <?php endif; ?>
+        
+        <!-- Course Summary -->
+        <div class="content-card">
+            <h4>Course Summary</h4>
+            <div class="modern-course-info-content">
+                <?= nl2br(htmlspecialchars($course['summary'] ?? 'No summary available.')) ?>
+            </div>
+        </div>
+
+        <!-- PDF Content -->
+        <?php if($course['file_pdf']): ?>
+        <div class="content-card">
+            <h5><i class="fas fa-file-pdf"></i> Course PDF Material</h5>
             
-            <!-- Course Summary -->
-            <div class="content-card">
-                <h4>Course Summary</h4>
-                <div class="modern-course-info-content">
-                    <?= nl2br(htmlspecialchars($course['summary'] ?? 'No summary available.')) ?>
-                </div>
+            <div class="pdf-viewer">
+                <iframe
+                    src="<?= BASE_URL ?>/uploads/pdf/<?= htmlspecialchars($course['file_pdf']) ?>"
+                    width="100%"
+                    height="600">
+                </iframe>
             </div>
 
-            <!-- PDF Content -->
-            <?php if($course['file_pdf']): ?>
-            <div class="content-card">
-                <h5><i class="fas fa-file-pdf"></i> Course PDF Material</h5>
-                
-                <div class="pdf-viewer">
-                    <iframe
-                        src="<?= BASE_URL ?>/uploads/pdf/<?= htmlspecialchars($course['file_pdf']) ?>"
-                        width="100%"
-                        height="600">
-                    </iframe>
-                </div>
-
-                <div class="mt-3">
-                    <a class="btn-view-enrollees" href="<?= BASE_URL ?>/uploads/pdf/<?= htmlspecialchars($course['file_pdf']) ?>" target="_blank">
-                        <i class="fas fa-external-link-alt me-2"></i>Open PDF in new tab
-                    </a>
-                </div>
+            <div class="mt-3">
+                <a class="btn-view-enrollees" href="<?= BASE_URL ?>/uploads/pdf/<?= htmlspecialchars($course['file_pdf']) ?>" target="_blank">
+                    <i class="fas fa-external-link-alt me-2"></i>Open PDF in new tab
+                </a>
             </div>
-            <?php endif; ?>
+        </div>
+        <?php endif; ?>
 
-            <!-- Assessment Section - For Proponent View -->
-            <?php if($assessment): ?>
-            <div class="content-card assessment-container">
-                <div class="assessment-header">
-                    <h5 class="assessment-title">
-                        <i class="fas fa-file-alt" style="color: #1d6fb0; margin-right: 8px;"></i>
-                        Course Assessment
-                    </h5>
-                    <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
-                        <div class="assessment-stats">
-                            <span class="stat-pill">
-                                <i class="fas fa-list"></i> <?= count($questions) ?> Questions
-                            </span>
-                            <?php if($assessment['time_limit']): ?>
-                            <span class="stat-pill">
-                                <i class="fas fa-clock"></i> <?= $assessment['time_limit'] ?> min
-                            </span>
-                            <?php endif; ?>
-                            <span class="stat-pill">
-                                <i class="fas fa-check-circle"></i> Passing: <?= $assessment['passing_score'] ?>%
-                            </span>
-                            <?php if($assessment['attempts_allowed']): ?>
-                            <span class="stat-pill">
-                                <i class="fas fa-redo"></i> <?= $assessment['attempts_allowed'] ?> attempts
-                            </span>
-                            <?php endif; ?>
-                        </div>
-                        <button id="fullscreenBtn" class="fullscreen-btn">
-                            <i class="fas fa-expand"></i> Fullscreen
-                        </button>
+        <!-- Assessment Section - For Proponent View -->
+        <?php if($assessment): ?>
+        <div class="content-card assessment-container">
+            <div class="assessment-header">
+                <h5 class="assessment-title">
+                    <i class="fas fa-file-alt" style="color: #1d6fb0; margin-right: 8px;"></i>
+                    Course Assessment
+                </h5>
+                <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+                    <div class="assessment-stats">
+                        <span class="stat-pill">
+                            <i class="fas fa-list"></i> <?= count($questions) ?> Questions
+                        </span>
+                        <?php if($assessment['time_limit']): ?>
+                        <span class="stat-pill">
+                            <i class="fas fa-clock"></i> <?= $assessment['time_limit'] ?> min
+                        </span>
+                        <?php endif; ?>
+                        <span class="stat-pill">
+                            <i class="fas fa-check-circle"></i> Passing: <?= $assessment['passing_score'] ?>%
+                        </span>
+                        <?php if($assessment['attempts_allowed']): ?>
+                        <span class="stat-pill">
+                            <i class="fas fa-redo"></i> <?= $assessment['attempts_allowed'] ?> attempts
+                        </span>
+                        <?php endif; ?>
                     </div>
+                    <button id="fullscreenBtn" class="fullscreen-btn">
+                        <i class="fas fa-expand"></i> Fullscreen
+                    </button>
                 </div>
+            </div>
 
-                <?php if(!empty($questions)): ?>
-                    <div class="assessment-scroll-container">
-                        <div class="question-list">
-                            <?php foreach($questions as $index => $q): ?>
-                                <div class="question-item">
-                                    <div class="question-header">
-                                        <span class="question-number">Question <?= $index + 1 ?></span>
-                                        <span class="question-points"><?= $q['points'] ?> points</span>
-                                    </div>
-                                    <div class="question-text"><?= htmlspecialchars($q['question_text']) ?></div>
-                                    
-                                    <div class="options-grid">
-                                        <?php 
-                                        $options = [
-                                            'A' => $q['option_a'],
-                                            'B' => $q['option_b'],
-                                            'C' => $q['option_c'],
-                                            'D' => $q['option_d']
-                                        ];
-                                        foreach($options as $letter => $text):
-                                            if(empty($text)) continue;
-                                            $isCorrect = ($letter === $q['correct_option']);
-                                        ?>
-                                        <div class="option-item <?= $isCorrect ? 'option-correct' : '' ?>">
-                                            <span class="option-letter"><?= $letter ?></span>
-                                            <span><?= htmlspecialchars($text) ?></span>
-                                            <?php if($isCorrect): ?>
-                                                <span class="correct-badge">✓ Correct</span>
-                                            <?php endif; ?>
-                                        </div>
-                                        <?php endforeach; ?>
-                                    </div>
+            <?php if(!empty($questions)): ?>
+                <div class="assessment-scroll-container">
+                    <div class="question-list">
+                        <?php foreach($questions as $index => $q): ?>
+                            <div class="question-item">
+                                <div class="question-header">
+                                    <span class="question-number">Question <?= $index + 1 ?></span>
+                                    <span class="question-points"><?= $q['points'] ?> points</span>
                                 </div>
-                            <?php endforeach; ?>
-                        </div>
-                    </div>
-                <?php else: ?>
-                    <div class="no-assessment">
-                        <i class="fas fa-file-alt"></i>
-                        <h5>No Questions Added</h5>
-                        <p>This assessment has no questions yet.</p>
-                    </div>
-                <?php endif; ?>
-            </div>
-            <?php endif; ?>
-
-            <!-- Kitchen accent -->
-            <div class="kitchen-accent">
-                <i class="fas fa-cube"></i>
-                <i class="fas fa-utensils"></i>
-                <i class="fas fa-cube"></i>
-            </div>
-        </div>
-
-        <!-- Drop Confirmation Modal -->
-        <div class="modal fade" id="dropConfirmModal" tabindex="-1">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header" style="background: #dc3545;">
-                        <h5 class="modal-title">
-                            <i class="fas fa-exclamation-triangle"></i> Confirm Drop Student
-                        </h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body">
-                        <p>Are you sure you want to drop <strong id="dropStudentName"></strong> from this course?</p>
-                        <p class="text-danger small">
-                            <i class="fas fa-info-circle"></i> 
-                            This will permanently remove:
-                        </p>
-                        <ul class="text-danger small">
-                            <li>Their enrollment record</li>
-                            <li>All PDF progress</li>
-                            <li>All assessment attempts and answers</li>
-                        </ul>
-                        <p class="text-danger small">This action cannot be undone!</p>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="button" class="btn-danger" id="confirmDropBtn">Yes, Drop Student</button>
+                                <div class="question-text"><?= htmlspecialchars($q['question_text']) ?></div>
+                                
+                                <div class="options-grid">
+                                    <?php 
+                                    $options = [
+                                        'A' => $q['option_a'],
+                                        'B' => $q['option_b'],
+                                        'C' => $q['option_c'],
+                                        'D' => $q['option_d']
+                                    ];
+                                    foreach($options as $letter => $text):
+                                        if(empty($text)) continue;
+                                        $isCorrect = ($letter === $q['correct_option']);
+                                    ?>
+                                    <div class="option-item <?= $isCorrect ? 'option-correct' : '' ?>">
+                                        <span class="option-letter"><?= $letter ?></span>
+                                        <span><?= htmlspecialchars($text) ?></span>
+                                        <?php if($isCorrect): ?>
+                                            <span class="correct-badge">✓ Correct</span>
+                                        <?php endif; ?>
+                                    </div>
+                                    <?php endforeach; ?>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
                     </div>
                 </div>
-            </div>
+            <?php else: ?>
+                <div class="no-assessment">
+                    <i class="fas fa-file-alt"></i>
+                    <h5>No Questions Added</h5>
+                    <p>This assessment has no questions yet.</p>
+                </div>
+            <?php endif; ?>
         </div>
+        <?php endif; ?>
 
-        <!-- Toast Container -->
-        <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 9999;"></div>
+        <!-- Kitchen accent -->
+        <div class="kitchen-accent">
+            <i class="fas fa-cube"></i>
+            <i class="fas fa-utensils"></i>
+            <i class="fas fa-cube"></i>
+        </div>
+    </div>
 
-        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-        <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-        <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            // Animation
-            const cards = document.querySelectorAll('.content-card, .course-info-card, .course-header');
-            cards.forEach((card, index) => {
-                card.style.opacity = '0';
-                card.style.transform = 'translateY(20px)';
-                card.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
-                
-                setTimeout(() => {
-                    card.style.opacity = '1';
-                    card.style.transform = 'translateY(0)';
-                }, index * 100);
-            });
+    <!-- Toast Container -->
+    <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 9999;"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Animation
+        const cards = document.querySelectorAll('.content-card, .course-info-card, .course-header');
+        cards.forEach((card, index) => {
+            card.style.opacity = '0';
+            card.style.transform = 'translateY(20px)';
+            card.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+            
+            setTimeout(() => {
+                card.style.opacity = '1';
+                card.style.transform = 'translateY(0)';
+            }, index * 100);
         });
+    });
 
-        // Fullscreen toggle for assessment
-        const fullscreenBtn = document.getElementById('fullscreenBtn');
-        const mainContent = document.getElementById('mainContent');
-        let isFullscreen = false;
+    // Fullscreen toggle for assessment
+    const fullscreenBtn = document.getElementById('fullscreenBtn');
+    const mainContent = document.getElementById('mainContent');
+    let isFullscreen = false;
 
-        if (fullscreenBtn) {
-            fullscreenBtn.addEventListener('click', function() {
-                isFullscreen = !isFullscreen;
+    if (fullscreenBtn) {
+        fullscreenBtn.addEventListener('click', function() {
+            isFullscreen = !isFullscreen;
+            
+            if (isFullscreen) {
+                mainContent.classList.add('fullscreen-mode');
+                fullscreenBtn.innerHTML = '<i class="fas fa-compress"></i> Exit Fullscreen';
+            } else {
+                mainContent.classList.remove('fullscreen-mode');
+                fullscreenBtn.innerHTML = '<i class="fas fa-expand"></i> Fullscreen';
+            }
+        });
+    }
+
+    // Handle ESC key to exit fullscreen
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && isFullscreen) {
+            isFullscreen = false;
+            mainContent.classList.remove('fullscreen-mode');
+            if (fullscreenBtn) {
+                fullscreenBtn.innerHTML = '<i class="fas fa-expand"></i> Fullscreen';
+            }
+        }
+    });
+
+    // Drop, Archive, Enroll functionality - NO RELOADS, ALL DYNAMIC
+    $(document).ready(function() {
+        let currentStudentId = null;
+        let currentStudentName = null;
+        let currentRow = null;
+        let currentAction = null; // 'drop' or 'archive'
+
+        // ===== SEARCH FUNCTIONALITY =====
+        function filterTable(searchTerm, tableId, rowClass) {
+            let visibleCount = 0;
+            $(tableId + ' tbody ' + rowClass).each(function() {
+                const name = $(this).data('name') || '';
+                const email = $(this).data('email') || '';
+                const username = $(this).data('username') || '';
                 
-                if (isFullscreen) {
-                    mainContent.classList.add('fullscreen-mode');
-                    fullscreenBtn.innerHTML = '<i class="fas fa-compress"></i> Exit Fullscreen';
+                if (name.includes(searchTerm) || email.includes(searchTerm) || username.includes(searchTerm)) {
+                    $(this).show();
+                    visibleCount++;
                 } else {
-                    mainContent.classList.remove('fullscreen-mode');
-                    fullscreenBtn.innerHTML = '<i class="fas fa-expand"></i> Fullscreen';
+                    $(this).hide();
                 }
             });
+            return visibleCount;
         }
 
-        // Handle ESC key to exit fullscreen
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape' && isFullscreen) {
-                isFullscreen = false;
-                mainContent.classList.remove('fullscreen-mode');
-                if (fullscreenBtn) {
-                    fullscreenBtn.innerHTML = '<i class="fas fa-expand"></i> Fullscreen';
-                }
-            }
+        // Search in enrolled students
+        $('#enrolledSearch').on('input', function() {
+            const searchTerm = this.value.toLowerCase().trim();
+            const visibleCount = filterTable(searchTerm, '#enrolledTable', '.enrolled-row');
+            $('#enrolledCount').text(visibleCount);
         });
 
-        // Drop, Enroll, Archive and Expired functionality - NO RELOADS, ALL DYNAMIC
-        $(document).ready(function() {
-            let currentStudentId = null;
-            let currentStudentName = null;
-            let currentRow = null;
+        // Search in available students
+        $('#availableSearch').on('input', function() {
+            const searchTerm = this.value.toLowerCase().trim();
+            const visibleCount = filterTable(searchTerm, '#availableTable', '.available-row');
+            $('#availableCount').text(visibleCount);
+        });
 
-            // ===== SEARCH FUNCTIONALITY =====
-            function filterTable(searchTerm, tableId, rowClass) {
-                let visibleCount = 0;
-                $(tableId + ' tbody ' + rowClass).each(function() {
-                    const name = $(this).data('name') || '';
-                    const email = $(this).data('email') || '';
-                    const username = $(this).data('username') || '';
+        // ===== ARCHIVE STUDENT (INDIVIDUAL) =====
+        $(document).on('click', '.archive-student', function() {
+            currentStudentId = $(this).data('student-id');
+            currentStudentName = $(this).data('student-name');
+            currentRow = $(this).closest('tr');
+            currentAction = 'archive';
+            $('#archiveStudentName').text(currentStudentName);
+            $('#archiveConfirmModal').modal('show');
+        });
+
+        // ===== DROP STUDENT (INDIVIDUAL) =====
+        $(document).on('click', '.drop-student', function() {
+            currentStudentId = $(this).data('student-id');
+            currentStudentName = $(this).data('student-name');
+            currentRow = $(this).closest('tr');
+            currentAction = 'drop';
+            $('#dropStudentName').text(currentStudentName);
+            $('#dropConfirmModal').modal('show');
+        });
+
+        // Confirm Archive
+        $('#confirmArchiveBtn').on('click', function() {
+            if (!currentStudentId || currentAction !== 'archive') return;
+
+            const button = $(this);
+            const originalText = button.html();
+            button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Archiving...');
+
+            $.ajax({
+                url: window.location.href,
+                method: 'POST',
+                data: {
+                    action: 'archive_student',
+                    student_id: currentStudentId,
+                    course_id: <?= $courseId ?>
+                },
+                dataType: 'json',
+                success: function(response) {
+                    $('#archiveConfirmModal').modal('hide');
                     
-                    if (name.includes(searchTerm) || email.includes(searchTerm) || username.includes(searchTerm)) {
-                        $(this).show();
-                        visibleCount++;
-                    } else {
-                        $(this).hide();
-                    }
-                });
-                return visibleCount;
-            }
-
-            // Search in enrolled students
-            $('#enrolledSearch').on('input', function() {
-                const searchTerm = this.value.toLowerCase().trim();
-                const visibleCount = filterTable(searchTerm, '#enrolledTable', '.enrolled-row');
-                $('#enrolledCount').text(visibleCount);
-            });
-
-            // Search in available students
-            $('#availableSearch').on('input', function() {
-                const searchTerm = this.value.toLowerCase().trim();
-                const visibleCount = filterTable(searchTerm, '#availableTable', '.available-row');
-                $('#availableCount').text(visibleCount);
-            });
-
-            // ===== ENROLL STUDENT (COMPLETELY DYNAMIC) =====
-            $('.enroll-student').on('click', function() {
-                const button = $(this);
-                const studentId = button.data('student-id');
-                const studentName = button.data('student-name');
-                const studentEmail = button.closest('tr').find('td:first small').text();
-                const studentAvatar = button.closest('tr').find('.student-avatar').text();
-                const row = button.closest('tr');
-                
-                // Disable button and show loading state
-                const originalText = button.html();
-                button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
-
-                $.ajax({
-                    url: window.location.href,
-                    method: 'POST',
-                    data: {
-                        action: 'enroll_student',
-                        student_id: studentId,
-                        course_id: <?= $courseId ?>
-                    },
-                    dataType: 'json',
-                    success: function(response) {
-                        if (response.success) {
-                            // Remove the row from available students table
-                            row.remove();
+                    if (response.success) {
+                        // Remove the row from enrolled students table
+                        currentRow.fadeOut(300, function() {
+                            $(this).remove();
                             
-                            // Add the student to enrolled table dynamically
-                            addStudentToEnrolledTable(studentId, studentName, studentEmail, studentAvatar);
-                            
-                            // Update available count
-                            const availableCount = $('#availableTable tbody tr').length;
-                            $('#availableCount').text(availableCount);
-                            
-                            // Show empty state if no more students
-                            if (availableCount === 0) {
-                                $('.modal-right .table-responsive').html(`
-                                    <div class="empty-state" style="padding: 2rem;">
-                                        <i class="fas fa-user-check"></i>
-                                        <h6>No Students Available</h6>
-                                        <p class="small">All students are already enrolled.</p>
-                                    </div>
-                                `);
-                            }
-                            
-                            // Update stats
-                            updateStatsAfterEnroll();
-                            
-                            showModalToast('success', `${studentName} enrolled successfully!`);
-                        } else {
-                            button.prop('disabled', false).html(originalText);
-                            showModalToast('error', response.message || 'Error enrolling student');
-                        }
-                    },
-                    error: function() {
-                        button.prop('disabled', false).html(originalText);
-                        showModalToast('error', 'Server error occurred');
-                    }
-                });
-            });
-
-            // ===== DROP STUDENT (COMPLETELY DYNAMIC) =====
-            $('.drop-student').on('click', function() {
-                currentStudentId = $(this).data('student-id');
-                currentStudentName = $(this).data('student-name');
-                currentRow = $(this).closest('tr');
-                $('#dropStudentName').text(currentStudentName);
-                $('#dropConfirmModal').modal('show');
-            });
-
-            $('#confirmDropBtn').on('click', function() {
-                if (!currentStudentId) return;
-
-                const button = $(this);
-                const originalText = button.html();
-                button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Dropping...');
-
-                $.ajax({
-                    url: window.location.href,
-                    method: 'POST',
-                    data: {
-                        action: 'drop_student',
-                        student_id: currentStudentId,
-                        course_id: <?= $courseId ?>
-                    },
-                    dataType: 'json',
-                    success: function(response) {
-                        $('#dropConfirmModal').modal('hide');
-                        
-                        if (response.success) {
-                            // Get student info before removing
-                            const studentRow = currentRow;
-                            const studentName = currentStudentName;
-                            const studentEmail = studentRow.find('td:first small').text();
-                            const studentAvatar = studentRow.find('.student-avatar').text();
-                            
-                            // Remove the row from enrolled students table
-                            studentRow.remove();
-                            
-                            // Add the student back to available table
-                            addStudentToAvailableTable(currentStudentId, studentName, studentEmail, studentAvatar);
-                            
-                            // Update enrolled count
+                            // Update counts
                             const enrolledCount = $('#enrolledTable tbody tr').length;
                             $('#enrolledCount').text(enrolledCount);
-                            
-                            // Update stats
-                            updateStatsAfterDrop();
+                            updateStatsFromTable();
                             
                             // Show empty state if no more students
                             if (enrolledCount === 0) {
@@ -1136,800 +1180,685 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                                 `);
                             }
                             
-                            showModalToast('success', `${currentStudentName} dropped successfully!`);
-                        } else {
-                            showModalToast('error', response.message || 'Error dropping student');
+                            showModalToast('success', `${currentStudentName} archived successfully!`);
+                        });
+                    } else {
+                        showModalToast('error', response.message || 'Error archiving student');
+                    }
+                    
+                    button.prop('disabled', false).html('Yes, Archive Student');
+                    currentStudentId = null;
+                    currentStudentName = null;
+                    currentRow = null;
+                    currentAction = null;
+                },
+                error: function() {
+                    $('#archiveConfirmModal').modal('hide');
+                    showModalToast('error', 'Server error occurred');
+                    button.prop('disabled', false).html('Yes, Archive Student');
+                }
+            });
+        });
+
+        // Confirm Drop
+        $('#confirmDropBtn').on('click', function() {
+            if (!currentStudentId || currentAction !== 'drop') return;
+
+            const button = $(this);
+            const originalText = button.html();
+            button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Dropping...');
+
+            $.ajax({
+                url: window.location.href,
+                method: 'POST',
+                data: {
+                    action: 'drop_student',
+                    student_id: currentStudentId,
+                    course_id: <?= $courseId ?>
+                },
+                dataType: 'json',
+                success: function(response) {
+                    $('#dropConfirmModal').modal('hide');
+                    
+                    if (response.success) {
+                        // Get student info before removing
+                        const studentRow = currentRow;
+                        const studentName = currentStudentName;
+                        const studentEmail = studentRow.find('td:first small').text();
+                        const studentAvatar = studentRow.find('.student-avatar').text();
+                        
+                        // Remove the row from enrolled students table
+                        studentRow.remove();
+                        
+                        // Add the student back to available table
+                        addStudentToAvailableTable(currentStudentId, studentName, studentEmail, studentAvatar);
+                        
+                        // Update enrolled count
+                        const enrolledCount = $('#enrolledTable tbody tr').length;
+                        $('#enrolledCount').text(enrolledCount);
+                        
+                        // Update stats
+                        updateStatsAfterDrop();
+                        
+                        // Show empty state if no more students
+                        if (enrolledCount === 0) {
+                            $('#enrolledTableContainer').html(`
+                                <div class="empty-state">
+                                    <i class="fas fa-user-graduate"></i>
+                                    <h5>No Enrolled Students Yet</h5>
+                                    <p>This course hasn't been taken by any students yet.</p>
+                                </div>
+                            `);
                         }
                         
-                        button.prop('disabled', false).html('Yes, Drop Student');
-                        currentStudentId = null;
-                        currentStudentName = null;
-                        currentRow = null;
+                        showModalToast('success', `${currentStudentName} dropped successfully!`);
+                    } else {
+                        showModalToast('error', response.message || 'Error dropping student');
+                    }
+                    
+                    button.prop('disabled', false).html('Yes, Drop Student');
+                    currentStudentId = null;
+                    currentStudentName = null;
+                    currentRow = null;
+                    currentAction = null;
+                },
+                error: function() {
+                    $('#dropConfirmModal').modal('hide');
+                    showModalToast('error', 'Server error occurred');
+                    button.prop('disabled', false).html('Yes, Drop Student');
+                }
+            });
+        });
+
+        // ===== ARCHIVE COMPLETED STUDENTS =====
+        window.archiveCompletedStudents = function() {
+            const completedCount = <?= $stats['completed_count'] ?? 0 ?>;
+            if (completedCount === 0) {
+                showModalToast('info', 'No completed students to archive');
+                return;
+            }
+            
+            if (!confirm(`Archive all ${completedCount} completed students?`)) return;
+            
+            const button = $('.btn-archive');
+            const originalText = button.html();
+            button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Archiving...');
+
+            $.ajax({
+                url: window.location.href,
+                method: 'POST',
+                data: {
+                    action: 'archive_completed',
+                    course_id: <?= $courseId ?>
+                },
+                dataType: 'json',
+                success: function(response) {
+                    if (response.success) {
+                        // Remove all completed students from the table
+                        $('#enrolledTable tbody tr').each(function() {
+                            const statusCell = $(this).find('td:eq(5) .status-badge');
+                            if (statusCell.text().includes('Completed')) {
+                                $(this).remove();
+                            }
+                        });
+                        
+                        // Update stats
+                        updateStatsFromTable();
+                        
+                        showModalToast('success', response.message);
+                    } else {
+                        showModalToast('error', response.message);
+                    }
+                    button.prop('disabled', false).html(originalText);
+                },
+                error: function() {
+                    showModalToast('error', 'Server error occurred');
+                    button.prop('disabled', false).html(originalText);
+                }
+            });
+        };
+
+        // ===== BATCH ARCHIVE SELECTED =====
+        window.batchArchive = function() {
+            const selectedIds = [];
+            document.querySelectorAll('.student-checkbox:checked').forEach(cb => {
+                selectedIds.push(cb.value);
+            });
+            
+            if (selectedIds.length === 0) {
+                showModalToast('info', 'No students selected');
+                return;
+            }
+            
+            if (!confirm(`Archive ${selectedIds.length} selected student(s)?`)) return;
+            
+            const button = $('#batchActionBar .btn-archive');
+            const originalText = button.html();
+            button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Archiving...');
+
+            $.ajax({
+                url: window.location.href,
+                method: 'POST',
+                data: {
+                    action: 'archive_multiple',
+                    student_ids: selectedIds,
+                    course_id: <?= $courseId ?>
+                },
+                dataType: 'json',
+                success: function(response) {
+                    if (response.success) {
+                        // Remove selected rows
+                        selectedIds.forEach(id => {
+                            $(`tr[data-id="${id}"]`).remove();
+                        });
+                        
+                        // Update counts
+                        updateStatsFromTable();
+                        
+                        // Exit select mode
+                        toggleSelectMode();
+                        
+                        showModalToast('success', response.message);
+                    } else {
+                        showModalToast('error', response.message);
+                    }
+                    button.prop('disabled', false).html('<i class="fas fa-archive"></i> Archive Selected');
+                },
+                error: function() {
+                    showModalToast('error', 'Server error occurred');
+                    button.prop('disabled', false).html('<i class="fas fa-archive"></i> Archive Selected');
+                }
+            });
+        };
+
+        // ===== BATCH DROP SELECTED =====
+        window.batchDrop = function() {
+            const selectedIds = [];
+            document.querySelectorAll('.student-checkbox:checked').forEach(cb => {
+                selectedIds.push(cb.value);
+            });
+            
+            if (selectedIds.length === 0) {
+                showModalToast('info', 'No students selected');
+                return;
+            }
+            
+            if (!confirm(`Drop ${selectedIds.length} selected student(s)? This action cannot be undone!`)) return;
+            
+            const button = $('#batchActionBar .btn-expired');
+            const originalText = button.html();
+            button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Dropping...');
+            
+            let completed = 0;
+            let failed = false;
+            
+            selectedIds.forEach(id => {
+                $.ajax({
+                    url: window.location.href,
+                    method: 'POST',
+                    data: {
+                        action: 'drop_student',
+                        student_id: id,
+                        course_id: <?= $courseId ?>
+                    },
+                    dataType: 'json',
+                    success: function(response) {
+                        completed++;
+                        if (response.success) {
+                            $(`tr[data-id="${id}"]`).remove();
+                        } else {
+                            failed = true;
+                        }
+                        if (completed === selectedIds.length) {
+                            button.prop('disabled', false).html('<i class="fas fa-user-minus"></i> Drop Selected');
+                            updateStatsFromTable();
+                            toggleSelectMode();
+                            if (failed) {
+                                showModalToast('warning', `${completed} student(s) dropped, some failed`);
+                            } else {
+                                showModalToast('success', `${completed} student(s) dropped successfully`);
+                            }
+                        }
                     },
                     error: function() {
-                        $('#dropConfirmModal').modal('hide');
-                        showModalToast('error', 'Server error occurred');
-                        button.prop('disabled', false).html('Yes, Drop Student');
+                        completed++;
+                        failed = true;
+                        if (completed === selectedIds.length) {
+                            button.prop('disabled', false).html('<i class="fas fa-user-minus"></i> Drop Selected');
+                            updateStatsFromTable();
+                            toggleSelectMode();
+                            showModalToast('error', 'Some students could not be dropped');
+                        }
                     }
                 });
             });
+        };
 
-            // ===== ARCHIVE COMPLETED STUDENTS (COMPLETELY DYNAMIC) =====
-            window.archiveCompletedStudents = function() {
-                const completedCount = <?= $stats['completed_count'] ?? 0 ?>;
-                if (completedCount === 0) {
-                    showModalToast('info', 'No completed students to archive');
-                    return;
-                }
-                
-                if (!confirm(`Archive all ${completedCount} completed students?`)) return;
-                
-                const button = $('.btn-archive');
-                const originalText = button.html();
-                button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Archiving...');
+        // ===== HELPER FUNCTIONS =====
 
-                $.ajax({
-                    url: window.location.href,
-                    method: 'POST',
-                    data: {
-                        action: 'archive_completed',
-                        course_id: <?= $courseId ?>
-                    },
-                    dataType: 'json',
-                    success: function(response) {
-                        if (response.success) {
-                            // Remove all completed students from the table
-                            $('#enrolledTable tbody tr').each(function() {
-                                const statusCell = $(this).find('td:eq(1) span'); // Status is in column 2
-                                if (statusCell.text().includes('Completed')) {
-                                    $(this).remove();
-                                }
-                            });
-                            
-                            // Update stats
-                            updateStatsFromTable();
-                            
-                            showModalToast('success', response.message);
-                        } else {
-                            showModalToast('error', response.message);
-                        }
-                        button.prop('disabled', false).html(originalText);
-                    },
-                    error: function() {
-                        showModalToast('error', 'Server error occurred');
-                        button.prop('disabled', false).html(originalText);
-                    }
-                });
-            };
-
-            // ===== PROCESS EXPIRED COURSE (COMPLETELY DYNAMIC) =====
-            window.processExpiredCourse = function() {
-                if (!confirm('This course has expired. This will:\n- Archive all completed students\n- Mark ongoing students as expired\n\nProceed?')) return;
-                
-                const button = $('.btn-expired');
-                const originalText = button.html();
-                button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Processing...');
-
-                $.ajax({
-                    url: window.location.href,
-                    method: 'POST',
-                    data: {
-                        action: 'process_expired',
-                        course_id: <?= $courseId ?>
-                    },
-                    dataType: 'json',
-                    success: function(response) {
-                        if (response.success) {
-                            // Update status of all ongoing students to expired
-                            $('#enrolledTable tbody tr').each(function() {
-                                const statusCell = $(this).find('td:eq(1) span');
-                                if (statusCell.text().includes('Ongoing')) {
-                                    statusCell.removeClass('badge-ongoing').addClass('badge-expired');
-                                    statusCell.html('<i class="fas fa-hourglass-end"></i> Expired');
-                                }
-                            });
-                            
-                            // Remove completed students (they get archived)
-                            $('#enrolledTable tbody tr').each(function() {
-                                const statusCell = $(this).find('td:eq(1) span');
-                                if (statusCell.text().includes('Completed')) {
-                                    $(this).remove();
-                                }
-                            });
-                            
-                            // Update stats
-                            updateStatsFromTable();
-                            
-                            showModalToast('success', response.message);
-                        } else {
-                            showModalToast('error', response.message);
-                        }
-                        button.prop('disabled', false).html(originalText);
-                    },
-                    error: function() {
-                        showModalToast('error', 'Server error occurred');
-                        button.prop('disabled', false).html(originalText);
-                    }
-                });
-            };
-
-            // ===== HELPER FUNCTIONS =====
-
-            // Function to add a student to enrolled table
-            function addStudentToEnrolledTable(id, name, email, avatar) {
+        // Function to add student to available table
+        function addStudentToAvailableTable(id, name, email, avatar) {
+            // Check if available table exists
+            if ($('#availableTable tbody').length) {
                 const newRow = `
-                    <tr class="enrolled-row" 
+                    <tr class="available-row available-checkbox-row" 
+                        data-id="${id}"
                         data-name="${name.toLowerCase()}"
                         data-email="${email.toLowerCase()}">
                         <td>
+                            <input type="checkbox" class="available-checkbox" value="${id}">
+                        </td>
+                        <td>
                             <div class="d-flex align-items-center">
-                                <div class="student-avatar me-3">${avatar}</div>
+                                <div class="student-avatar me-2" style="width: 30px; height: 30px; font-size: 0.8rem;">
+                                    ${avatar}
+                                </div>
                                 <div>
                                     <strong>${name}</strong>
                                     <small class="d-block text-muted">${email}</small>
                                 </div>
                             </div>
                         </td>
-                        <td>
-                            <span class="status-badge badge-ongoing">
-                                <i class="fas fa-play-circle"></i> Ongoing
-                            </span>
-                        </td>
-                        <td>
-                            <div class="d-flex align-items-center gap-2">
-                                <span class="fw-bold">0%</span>
-                                <div class="progress-mini">
-                                    <div class="progress-mini-bar" style="width: 0%;"></div>
-                                </div>
-                            </div>
-                        </td>
-                        <td>
-                            <span class="assessment-none">
-                                <i class="fas fa-minus-circle"></i> No Assessment
-                            </span>
-                        </td>
-                        <td><span class="text-muted">—</span></td>
-                        <td><span class="text-muted">0</span></td>
-                        <td>
-                            <button class="btn-drop drop-student" 
-                                    data-student-id="${id}"
-                                    data-student-name="${name}"
-                                    data-course-id="<?= $courseId ?>">
-                                <i class="fas fa-user-minus"></i> Drop
-                            </button>
-                        </td>
                     </tr>
                 `;
-                
-                // Append to table or create table if empty
-                if ($('#enrolledTable tbody').length) {
-                    $('#enrolledTable tbody').append(newRow);
-                } else {
-                    $('#enrolledTableContainer').html(`
-                        <table class="table" id="enrolledTable">
-                            <thead>...</thead>
-                            <tbody>${newRow}</tbody>
-                        </table>
-                    `);
-                }
-                
-                // Re-attach drop handler to new button
-                attachDropHandlers();
-            }
-
-            // Function to add a student back to available table
-            function addStudentToAvailableTable(id, name, email, avatar) {
-                // Check if available table exists
-                if ($('#availableTable tbody').length) {
-                    const newRow = `
-                        <tr class="available-row" 
-                            data-name="${name.toLowerCase()}"
-                            data-email="${email.toLowerCase()}">
-                            <td>
-                                <div class="d-flex align-items-center">
-                                    <div class="student-avatar me-2" style="width: 30px; height: 30px; font-size: 0.8rem;">
-                                        ${avatar}
-                                    </div>
-                                    <div>
-                                        <strong>${name}</strong>
-                                        <small class="d-block text-muted">${email}</small>
-                                    </div>
-                                </div>
-                            </td>
-                            <td>
-                                <button class="btn-enroll-sm enroll-student" 
-                                        data-student-id="${id}"
-                                        data-student-name="${name}"
-                                        data-course-id="<?= $courseId ?>">
-                                    <i class="fas fa-user-plus"></i> Enroll
-                                </button>
-                            </td>
-                        </tr>
-                    `;
-                    $('#availableTable tbody').append(newRow);
-                } else {
-                    // Recreate the table
-                    $('.modal-right .table-responsive').html(`
-                        <table class="table" id="availableTable">
-                            <thead>
-                                <tr>
-                                    <th>Student</th>
-                                    <th>Action</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr class="available-row" 
-                                    data-name="${name.toLowerCase()}"
-                                    data-email="${email.toLowerCase()}">
-                                    <td>
-                                        <div class="d-flex align-items-center">
-                                            <div class="student-avatar me-2" style="width: 30px; height: 30px; font-size: 0.8rem;">
-                                                ${avatar}
-                                            </div>
-                                            <div>
-                                                <strong>${name}</strong>
-                                                <small class="d-block text-muted">${email}</small>
-                                            </div>
+                $('#availableTable tbody').append(newRow);
+            } else {
+                // Recreate the table
+                $('.modal-right .table-responsive').html(`
+                    <table class="table" id="availableTable">
+                        <thead>
+                            <tr>
+                                <th style="width: 40px;">
+                                    <input type="checkbox" id="selectAllAvailable" onchange="toggleAllAvailable()">
+                                </th>
+                                <th>Student</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr class="available-row available-checkbox-row" 
+                                data-id="${id}"
+                                data-name="${name.toLowerCase()}"
+                                data-email="${email.toLowerCase()}">
+                                <td>
+                                    <input type="checkbox" class="available-checkbox" value="${id}">
+                                </td>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <div class="student-avatar me-2" style="width: 30px; height: 30px; font-size: 0.8rem;">
+                                            ${avatar}
                                         </div>
-                                    </td>
-                                    <td>
-                                        <button class="btn-enroll-sm enroll-student" 
-                                                data-student-id="${id}"
-                                                data-student-name="${name}"
-                                                data-course-id="<?= $courseId ?>">
-                                            <i class="fas fa-user-plus"></i> Enroll
-                                        </button>
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    `);
-                }
-                
-                // Re-attach enroll handler
-                attachEnrollHandlers();
-                
-                // Update available count
-                $('#availableCount').text($('#availableTable tbody tr').length);
-            }
-
-            // Function to update stats based on current table rows
-            function updateStatsFromTable() {
-                const totalRows = $('#enrolledTable tbody tr').length;
-                const ongoingRows = $('#enrolledTable tbody tr').filter(function() {
-                    return $(this).find('td:eq(1) span').text().includes('Ongoing');
-                }).length;
-                const completedRows = $('#enrolledTable tbody tr').filter(function() {
-                    return $(this).find('td:eq(1) span').text().includes('Completed');
-                }).length;
-                
-                // Update stat items
-                $('.stat-item:contains("Total")').html(`<i class="fas fa-users"></i> Total: ${totalRows}`);
-                $('.stat-item:contains("Ongoing")').html(`<i class="fas fa-spinner"></i> Ongoing: ${ongoingRows}`);
-                $('.stat-item:contains("Completed")').html(`<i class="fas fa-check-circle"></i> Completed: ${completedRows}`);
-                
-                // Update enrolled count display
-                $('#enrolledCount').text(totalRows);
-            }
-
-            function updateStatsAfterEnroll() {
-                const totalStat = $('.stat-item:contains("Total")');
-                const currentTotal = parseInt(totalStat.text().match(/\d+/)[0]) || 0;
-                totalStat.html(`<i class="fas fa-users"></i> Total: ${currentTotal + 1}`);
-                
-                const ongoingStat = $('.stat-item:contains("Ongoing")');
-                const currentOngoing = parseInt(ongoingStat.text().match(/\d+/)[0]) || 0;
-                ongoingStat.html(`<i class="fas fa-spinner"></i> Ongoing: ${currentOngoing + 1}`);
-                
-                $('#enrolledCount').text(currentTotal + 1);
-            }
-
-            function updateStatsAfterDrop() {
-                const totalRows = $('#enrolledTable tbody tr').length;
-                const ongoingRows = $('#enrolledTable tbody tr').filter(function() {
-                    return $(this).find('td:eq(1) span').text().includes('Ongoing');
-                }).length;
-                const completedRows = $('#enrolledTable tbody tr').filter(function() {
-                    return $(this).find('td:eq(1) span').text().includes('Completed');
-                }).length;
-                
-                $('.stat-item:contains("Total")').html(`<i class="fas fa-users"></i> Total: ${totalRows}`);
-                $('.stat-item:contains("Ongoing")').html(`<i class="fas fa-spinner"></i> Ongoing: ${ongoingRows}`);
-                $('.stat-item:contains("Completed")').html(`<i class="fas fa-check-circle"></i> Completed: ${completedRows}`);
-                
-                $('#enrolledCount').text(totalRows);
-            }
-
-            // Function to attach drop handlers to new buttons
-            function attachDropHandlers() {
-                $('.drop-student').off('click').on('click', function() {
-                    currentStudentId = $(this).data('student-id');
-                    currentStudentName = $(this).data('student-name');
-                    currentRow = $(this).closest('tr');
-                    $('#dropStudentName').text(currentStudentName);
-                    $('#dropConfirmModal').modal('show');
-                });
-            }
-
-            // Function to attach enroll handlers to new buttons
-            function attachEnrollHandlers() {
-                $('.enroll-student').off('click').on('click', function() {
-                    const button = $(this);
-                    const studentId = button.data('student-id');
-                    const studentName = button.data('student-name');
-                    const studentEmail = button.closest('tr').find('td:first small').text();
-                    const studentAvatar = button.closest('tr').find('.student-avatar').text();
-                    const row = button.closest('tr');
-                    
-                    const originalText = button.html();
-                    button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
-
-                    $.ajax({
-                        url: window.location.href,
-                        method: 'POST',
-                        data: {
-                            action: 'enroll_student',
-                            student_id: studentId,
-                            course_id: <?= $courseId ?>
-                        },
-                        dataType: 'json',
-                        success: function(response) {
-                            if (response.success) {
-                                row.remove();
-                                addStudentToEnrolledTable(studentId, studentName, studentEmail, studentAvatar);
-                                
-                                const availableCount = $('#availableTable tbody tr').length;
-                                $('#availableCount').text(availableCount);
-                                
-                                if (availableCount === 0) {
-                                    $('.modal-right .table-responsive').html(`
-                                        <div class="empty-state" style="padding: 2rem;">
-                                            <i class="fas fa-user-check"></i>
-                                            <h6>No Students Available</h6>
-                                            <p class="small">All students are already enrolled.</p>
+                                        <div>
+                                            <strong>${name}</strong>
+                                            <small class="d-block text-muted">${email}</small>
                                         </div>
-                                    `);
-                                }
-                                
-                                updateStatsAfterEnroll();
-                                showModalToast('success', `${studentName} enrolled successfully!`);
-                            } else {
-                                button.prop('disabled', false).html(originalText);
-                                showModalToast('error', response.message || 'Error enrolling student');
-                            }
-                        },
-                        error: function() {
-                            button.prop('disabled', false).html(originalText);
-                            showModalToast('error', 'Server error occurred');
-                        }
-                    });
-                });
-            }
-
-            // Toast function for modal (stays inside modal)
-            function showModalToast(type, message) {
-                const bgColor = type === 'success' ? '#28a745' : (type === 'info' ? '#17a2b8' : '#dc3545');
-                const icon = type === 'success' ? 'fa-check-circle' : (type === 'info' ? 'fa-info-circle' : 'fa-exclamation-circle');
-                
-                // Remove any existing toasts in modal
-                $('#enrolleesModal .modal-toast').remove();
-                
-                const toast = $(`
-                    <div class="alert alert-${type} modal-toast" style="
-                        position: absolute;
-                        top: 20px;
-                        right: 20px;
-                        z-index: 1060;
-                        border: 3px solid #1a4b77;
-                        border-radius: 0;
-                        background: ${bgColor};
-                        color: white;
-                        padding: 1rem;
-                        min-width: 250px;
-                        box-shadow: 8px 8px 0 #123a5e;
-                        animation: slideIn 0.3s ease;
-                    ">
-                        <i class="fas ${icon} me-2"></i>
-                        ${message}
-                    </div>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
                 `);
-                
-                $('#enrolleesModal .modal-body').append(toast);
-                
-                setTimeout(() => {
-                    toast.fadeOut(300, function() { $(this).remove(); });
-                }, 3000);
             }
+            
+            // Update available count
+            $('#availableCount').text($('#availableTable tbody tr').length);
+        }
 
-            // Keep the original showToast for page-level toasts
-            window.showToast = function(type, message) {
-                const bgColor = type === 'success' ? '#28a745' : '#dc3545';
-                const icon = type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle';
-                
-                const toast = $(`
-                    <div class="toast show" role="alert" style="border: 3px solid #1a4b77; border-radius: 0;">
-                        <div class="toast-header" style="background: ${bgColor}; color: white; border-bottom: 2px solid #0f4980;">
-                            <i class="fas ${icon} me-2"></i>
-                            <strong class="me-auto">${type === 'success' ? 'Success' : 'Error'}</strong>
-                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast"></button>
-                        </div>
-                        <div class="toast-body" style="background: white; color: #07223b;">
-                            ${message}
-                        </div>
-                    </div>
-                `);
-                
-                $('.toast-container').append(toast);
-                
-                setTimeout(() => {
-                    toast.fadeOut(300, function() { $(this).remove(); });
-                }, 3000);
-            };
+        // Function to update stats based on current table rows
+        function updateStatsFromTable() {
+            const totalRows = $('#enrolledTable tbody tr').length;
+            const ongoingRows = $('#enrolledTable tbody tr').filter(function() {
+                return $(this).find('td:eq(5) .status-badge').text().includes('Ongoing');
+            }).length;
+            const completedRows = $('#enrolledTable tbody tr').filter(function() {
+                return $(this).find('td:eq(5) .status-badge').text().includes('Completed');
+            }).length;
+            
+            // Update stat items
+            $('.stat-item:contains("Total")').html(`<i class="fas fa-users"></i> Total: ${totalRows}`);
+            $('.stat-item:contains("Ongoing")').html(`<i class="fas fa-spinner"></i> Ongoing: ${ongoingRows}`);
+            $('.stat-item:contains("Completed")').html(`<i class="fas fa-check-circle"></i> Completed: ${completedRows}`);
+            
+            // Update enrolled count display
+            $('#enrolledCount').text(totalRows);
+        }
+
+        function updateStatsAfterDrop() {
+            const totalRows = $('#enrolledTable tbody tr').length;
+            const ongoingRows = $('#enrolledTable tbody tr').filter(function() {
+                return $(this).find('td:eq(5) .status-badge').text().includes('Ongoing');
+            }).length;
+            const completedRows = $('#enrolledTable tbody tr').filter(function() {
+                return $(this).find('td:eq(5) .status-badge').text().includes('Completed');
+            }).length;
+            
+            $('.stat-item:contains("Total")').html(`<i class="fas fa-users"></i> Total: ${totalRows}`);
+            $('.stat-item:contains("Ongoing")').html(`<i class="fas fa-spinner"></i> Ongoing: ${ongoingRows}`);
+            $('.stat-item:contains("Completed")').html(`<i class="fas fa-check-circle"></i> Completed: ${completedRows}`);
+            
+            $('#enrolledCount').text(totalRows);
+        }
+
+        // Toast function for modal
+        function showModalToast(type, message) {
+            const bgColor = type === 'success' ? '#28a745' : (type === 'info' ? '#17a2b8' : (type === 'warning' ? '#ffc107' : '#dc3545'));
+            const icon = type === 'success' ? 'fa-check-circle' : (type === 'info' ? 'fa-info-circle' : (type === 'warning' ? 'fa-exclamation-triangle' : 'fa-exclamation-circle'));
+            
+            // Remove any existing toasts in modal
+            $('#enrolleesModal .modal-toast').remove();
+            
+            const toast = $(`
+                <div class="alert modal-toast" style="
+                    position: absolute;
+                    top: 20px;
+                    right: 20px;
+                    z-index: 1060;
+                    border: 3px solid #1a4b77;
+                    border-radius: 0;
+                    background: ${bgColor};
+                    color: ${type === 'warning' ? '#07223b' : 'white'};
+                    padding: 1rem;
+                    min-width: 250px;
+                    box-shadow: 8px 8px 0 #123a5e;
+                    animation: slideIn 0.3s ease;
+                ">
+                    <i class="fas ${icon} me-2"></i>
+                    ${message}
+                </div>
+            `);
+            
+            $('#enrolleesModal .modal-body').append(toast);
+            
+            setTimeout(() => {
+                toast.fadeOut(300, function() { $(this).remove(); });
+            }, 3000);
+        }
+    });
+
+    // Toggle Enroll New Students section
+    function toggleEnrollSection() {
+        const enrollSection = document.getElementById('enrollSection');
+        const modalLeft = document.getElementById('modalLeft');
+        const enrollBtn = document.getElementById('enrollNewBtn');
+        
+        if (enrollSection.style.display === 'none') {
+            // Show enroll section
+            enrollSection.style.display = 'block';
+            modalLeft.style.flex = '1.5'; // Reduce left side width
+            enrollBtn.innerHTML = '<i class="fas fa-times"></i> Close';
+            enrollBtn.style.background = '#dc3545';
+        } else {
+            // Hide enroll section
+            enrollSection.style.display = 'none';
+            modalLeft.style.flex = '2'; // Restore left side width
+            enrollBtn.innerHTML = '<i class="fas fa-user-plus"></i> Enroll New';
+            enrollBtn.style.background = '#28a745';
+        }
+    }
+
+    // Toggle all available checkboxes
+    function toggleAllAvailable() {
+        const selectAll = document.getElementById('selectAllAvailable').checked;
+        document.querySelectorAll('.available-checkbox').forEach(cb => {
+            cb.checked = selectAll;
         });
-
-// Toggle Enroll New Students section
-function toggleEnrollSection() {
-    const enrollSection = document.getElementById('enrollSection');
-    const modalLeft = document.getElementById('modalLeft');
-    const enrollBtn = document.getElementById('enrollNewBtn');
-    
-    if (enrollSection.style.display === 'none') {
-        // Show enroll section
-        enrollSection.style.display = 'block';
-        modalLeft.style.flex = '1.5'; // Reduce left side width
-        enrollBtn.innerHTML = '<i class="fas fa-times"></i> Close';
-        enrollBtn.style.background = '#dc3545';
-    } else {
-        // Hide enroll section
-        enrollSection.style.display = 'none';
-        modalLeft.style.flex = '2'; // Restore left side width
-        enrollBtn.innerHTML = '<i class="fas fa-user-plus"></i> Enroll New';
-        enrollBtn.style.background = '#28a745';
+        updateSelectedAvailableCount();
     }
-}
 
-// Toggle all available checkboxes
-function toggleAllAvailable() {
-    const selectAll = document.getElementById('selectAllAvailable').checked;
-    document.querySelectorAll('.available-checkbox').forEach(cb => {
-        cb.checked = selectAll;
-    });
-    updateSelectedAvailableCount();
-}
-
-// Update selected count
-function updateSelectedAvailableCount() {
-    const count = document.querySelectorAll('.available-checkbox:checked').length;
-    document.getElementById('enrollCount').textContent = count;
-    
-    const badge = document.getElementById('selectedAvailableCount');
-    if (count > 0) {
-        badge.style.display = 'inline';
-        badge.textContent = count + ' selected';
-    } else {
-        badge.style.display = 'none';
-    }
-}
-
-// Add change event to available checkboxes
-$(document).on('change', '.available-checkbox', function() {
-    updateSelectedAvailableCount();
-    
-    // Update select all checkbox
-    const totalCheckboxes = document.querySelectorAll('.available-checkbox').length;
-    const checkedCheckboxes = document.querySelectorAll('.available-checkbox:checked').length;
-    document.getElementById('selectAllAvailable').checked = totalCheckboxes === checkedCheckboxes;
-});
-
-// Make rows clickable to toggle checkbox
-$(document).on('click', '.available-checkbox-row', function(e) {
-    if (e.target.type === 'checkbox') return;
-    const checkbox = $(this).find('.available-checkbox')[0];
-    if (checkbox) {
-        checkbox.checked = !checkbox.checked;
-        $(checkbox).trigger('change');
-    }
-});
-
-// Enroll selected students
-function enrollSelectedStudents() {
-    const selectedIds = [];
-    document.querySelectorAll('.available-checkbox:checked').forEach(cb => {
-        selectedIds.push(cb.value);
-    });
-    
-    if (selectedIds.length === 0) {
-        showModalToast('info', 'No students selected');
-        return;
-    }
-    
-    if (!confirm(`Enroll ${selectedIds.length} selected student(s)?`)) return;
-    
-    const button = $('#enrollSelectedBtn');
-    const originalText = button.html();
-    button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Enrolling...');
-    
-    // Create a form to submit multiple enrollments
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.style.display = 'none';
-    
-    // Add all selected IDs
-    selectedIds.forEach(id => {
-        const input = document.createElement('input');
-        input.type = 'hidden';
-        input.name = 'enroll_ids[]';
-        input.value = id;
-        form.appendChild(input);
-    });
-    
-    // Add action and course_id
-    const actionInput = document.createElement('input');
-    actionInput.type = 'hidden';
-    actionInput.name = 'action';
-    actionInput.value = 'enroll_multiple';
-    form.appendChild(actionInput);
-    
-    const courseInput = document.createElement('input');
-    courseInput.type = 'hidden';
-    courseInput.name = 'course_id';
-    courseInput.value = '<?= $courseId ?>';
-    form.appendChild(courseInput);
-    
-    document.body.appendChild(form);
-    form.submit();
-}
-
-// Show report modal
-function showReportModal() {
-    $('#reportModal').modal('show');
-}
-
-// Download CSV
-function downloadCSV() {
-    // Get data from the report table
-    const rows = [];
-    const headers = ['Student', 'Score', 'Status'];
-    rows.push(headers.join(','));
-    
-    // Get data rows (only visible rows, respecting search filter)
-    const visibleRows = document.querySelectorAll('#enrolledTable tbody tr:not([style*="display: none"])');
-    
-    visibleRows.forEach(row => {
-        const studentName = row.querySelector('td:nth-child(2) strong').textContent;
-        const studentEmail = row.querySelector('td:nth-child(2) small').textContent;
-        const score = row.querySelector('td:nth-child(5)')?.textContent.trim() || '—';
-        const status = row.querySelector('td:nth-child(6) .status-badge').textContent.trim();
+    // Update selected count
+    function updateSelectedAvailableCount() {
+        const count = document.querySelectorAll('.available-checkbox:checked').length;
+        document.getElementById('enrollCount').textContent = count;
         
-        // Combine name and email for the Student column
-        const student = `${studentName} (${studentEmail})`;
-        
-        // Clean up data
-        const cleanStudent = student.replace(/,/g, ''); // Remove commas to avoid CSV issues
-        const cleanScore = score.replace('%', '');
-        const cleanStatus = status.replace(/\s+/g, ' ').trim();
-        
-        rows.push(`"${cleanStudent}",${cleanScore},"${cleanStatus}"`);
-    });
-    
-    if (rows.length === 1) {
-        showModalToast('info', 'No data to export');
-        return;
+        const badge = document.getElementById('selectedAvailableCount');
+        if (count > 0) {
+            badge.style.display = 'inline';
+            badge.textContent = count + ' selected';
+        } else {
+            badge.style.display = 'none';
+        }
     }
-    
-    // Create CSV content
-    const csvContent = rows.join('\n');
-    
-    // Create download link
-    const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    
-    // Get current date for filename
-    const date = new Date();
-    const dateStr = date.toISOString().split('T')[0];
-    const filename = `student_report_<?= $courseId ?>_${dateStr}.csv`;
-    
-    link.setAttribute('href', url);
-    link.setAttribute('download', filename);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    
-    showModalToast('success', `Report downloaded with ${visibleRows.length} students`);
-}
 
-// Select Multiple Mode Functions
-let selectMode = false;
-
-function toggleSelectMode() {
-    selectMode = !selectMode;
-    const checkboxes = document.querySelectorAll('.select-checkbox');
-    const actionCells = document.querySelectorAll('.action-cell');
-    const selectBtn = document.getElementById('selectMultipleBtn');
-    const batchBar = document.getElementById('batchActionBar');
-    const rows = document.querySelectorAll('.enrolled-row');
-    
-    if (selectMode) {
-        // Show checkboxes, hide action buttons
-        checkboxes.forEach(cb => cb.style.display = 'table-cell');
-        actionCells.forEach(cell => cell.style.display = 'none');
-        selectBtn.innerHTML = '<i class="fas fa-times"></i> Cancel Selection';
-        selectBtn.style.background = '#dc3545';
-        batchBar.style.display = 'flex';
+    // Add change event to available checkboxes
+    $(document).on('change', '.available-checkbox', function() {
+        updateSelectedAvailableCount();
         
-        // Add click handler to rows
-        rows.forEach(row => {
-            row.classList.add('clickable');
-            row.addEventListener('click', handleRowClick);
+        // Update select all checkbox
+        const totalCheckboxes = document.querySelectorAll('.available-checkbox').length;
+        const checkedCheckboxes = document.querySelectorAll('.available-checkbox:checked').length;
+        document.getElementById('selectAllAvailable').checked = totalCheckboxes === checkedCheckboxes;
+    });
+
+    // Make rows clickable to toggle checkbox
+    $(document).on('click', '.available-checkbox-row', function(e) {
+        if (e.target.type === 'checkbox') return;
+        const checkbox = $(this).find('.available-checkbox')[0];
+        if (checkbox) {
+            checkbox.checked = !checkbox.checked;
+            $(checkbox).trigger('change');
+        }
+    });
+
+    // Enroll selected students
+    function enrollSelectedStudents() {
+        const selectedIds = [];
+        document.querySelectorAll('.available-checkbox:checked').forEach(cb => {
+            selectedIds.push(cb.value);
         });
         
-        // Uncheck all checkboxes and remove highlights
+        if (selectedIds.length === 0) {
+            showModalToast('info', 'No students selected');
+            return;
+        }
+        
+        if (!confirm(`Enroll ${selectedIds.length} selected student(s)?`)) return;
+        
+        const button = $('#enrollSelectedBtn');
+        const originalText = button.html();
+        button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Enrolling...');
+        
+        // Create a form to submit multiple enrollments
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.style.display = 'none';
+        
+        // Add all selected IDs
+        selectedIds.forEach(id => {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'enroll_ids[]';
+            input.value = id;
+            form.appendChild(input);
+        });
+        
+        // Add action and course_id
+        const actionInput = document.createElement('input');
+        actionInput.type = 'hidden';
+        actionInput.name = 'action';
+        actionInput.value = 'enroll_multiple';
+        form.appendChild(actionInput);
+        
+        const courseInput = document.createElement('input');
+        courseInput.type = 'hidden';
+        courseInput.name = 'course_id';
+        courseInput.value = '<?= $courseId ?>';
+        form.appendChild(courseInput);
+        
+        document.body.appendChild(form);
+        form.submit();
+    }
+
+    // Show report modal
+    function showReportModal() {
+        $('#reportModal').modal('show');
+    }
+
+    // Download CSV
+    function downloadCSV() {
+        // Get data from the report table
+        const rows = [];
+        const headers = ['Student', 'Score', 'Status'];
+        rows.push(headers.join(','));
+        
+        // Get data rows (only visible rows, respecting search filter)
+        const visibleRows = document.querySelectorAll('#enrolledTable tbody tr:not([style*="display: none"])');
+        
+        visibleRows.forEach(row => {
+            const studentName = row.querySelector('td:nth-child(2) strong').textContent;
+            const studentEmail = row.querySelector('td:nth-child(2) small').textContent;
+            const score = row.querySelector('td:nth-child(5)')?.textContent.trim() || '—';
+            const status = row.querySelector('td:nth-child(6) .status-badge').textContent.trim();
+            
+            // Combine name and email for the Student column
+            const student = `${studentName} (${studentEmail})`;
+            
+            // Clean up data
+            const cleanStudent = student.replace(/,/g, ''); // Remove commas to avoid CSV issues
+            const cleanScore = score.replace('%', '');
+            const cleanStatus = status.replace(/\s+/g, ' ').trim();
+            
+            rows.push(`"${cleanStudent}",${cleanScore},"${cleanStatus}"`);
+        });
+        
+        if (rows.length === 1) {
+            showModalToast('info', 'No data to export');
+            return;
+        }
+        
+        // Create CSV content
+        const csvContent = rows.join('\n');
+        
+        // Create download link
+        const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        
+        // Get current date for filename
+        const date = new Date();
+        const dateStr = date.toISOString().split('T')[0];
+        const filename = `student_report_<?= $courseId ?>_${dateStr}.csv`;
+        
+        link.setAttribute('href', url);
+        link.setAttribute('download', filename);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        
+        showModalToast('success', `Report downloaded with ${visibleRows.length} students`);
+    }
+
+    // Select Multiple Mode Functions
+    let selectMode = false;
+
+    function toggleSelectMode() {
+        selectMode = !selectMode;
+        const checkboxes = document.querySelectorAll('.select-checkbox');
+        const actionCells = document.querySelectorAll('.action-cell');
+        const selectBtn = document.getElementById('selectMultipleBtn');
+        const batchBar = document.getElementById('batchActionBar');
+        const rows = document.querySelectorAll('.enrolled-row');
+        
+        if (selectMode) {
+            // Show checkboxes, hide action buttons
+            checkboxes.forEach(cb => cb.style.display = 'table-cell');
+            actionCells.forEach(cell => cell.style.display = 'none');
+            selectBtn.innerHTML = '<i class="fas fa-times"></i> Cancel Selection';
+            selectBtn.style.background = '#dc3545';
+            batchBar.style.display = 'flex';
+            
+            // Add click handler to rows
+            rows.forEach(row => {
+                row.classList.add('clickable');
+                row.addEventListener('click', handleRowClick);
+            });
+            
+            // Uncheck all checkboxes and remove highlights
+            document.querySelectorAll('.student-checkbox').forEach(cb => {
+                cb.checked = false;
+                cb.closest('tr').classList.remove('selected-row');
+            });
+            document.getElementById('selectAllCheckbox').checked = false;
+            updateSelectedCount();
+        } else {
+            // Hide checkboxes, show action buttons
+            checkboxes.forEach(cb => cb.style.display = 'none');
+            actionCells.forEach(cell => cell.style.display = 'table-cell');
+            selectBtn.innerHTML = '<i class="fas fa-check-double"></i> Select Multiple';
+            selectBtn.style.background = '';
+            batchBar.style.display = 'none';
+            
+            // Remove click handler and highlights from rows
+            rows.forEach(row => {
+                row.classList.remove('clickable');
+                row.classList.remove('selected-row');
+                row.removeEventListener('click', handleRowClick);
+            });
+        }
+    }
+
+    function handleRowClick(event) {
+        // Don't toggle if clicking on the checkbox itself (to avoid double toggling)
+        if (event.target.type === 'checkbox') return;
+        // Don't toggle if clicking on buttons
+        if (event.target.classList.contains('btn-drop') || event.target.closest('.btn-drop')) return;
+        if (event.target.classList.contains('archive-student') || event.target.closest('.archive-student')) return;
+        
+        const row = event.currentTarget;
+        const checkbox = row.querySelector('.student-checkbox');
+        if (checkbox) {
+            checkbox.checked = !checkbox.checked;
+            // Toggle highlight class
+            if (checkbox.checked) {
+                row.classList.add('selected-row');
+            } else {
+                row.classList.remove('selected-row');
+            }
+            // Trigger change event to update select all and count
+            $(checkbox).trigger('change');
+        }
+    }
+
+    function cancelSelectMode() {
+        if (selectMode) {
+            toggleSelectMode();
+        }
+    }
+
+    function toggleSelectAll() {
+        const selectAll = document.getElementById('selectAllCheckbox').checked;
         document.querySelectorAll('.student-checkbox').forEach(cb => {
-            cb.checked = false;
-            cb.closest('tr').classList.remove('selected-row');
-        });
-        document.getElementById('selectAllCheckbox').checked = false;
-        updateSelectedCount();
-    } else {
-        // Hide checkboxes, show action buttons
-        checkboxes.forEach(cb => cb.style.display = 'none');
-        actionCells.forEach(cell => cell.style.display = 'table-cell');
-        selectBtn.innerHTML = '<i class="fas fa-check-double"></i> Select Multiple';
-        selectBtn.style.background = '';
-        batchBar.style.display = 'none';
-        
-        // Remove click handler and highlights from rows
-        rows.forEach(row => {
-            row.classList.remove('clickable');
-            row.classList.remove('selected-row');
-            row.removeEventListener('click', handleRowClick);
-        });
-    }
-}
-
-function handleRowClick(event) {
-    // Don't toggle if clicking on the checkbox itself (to avoid double toggling)
-    if (event.target.type === 'checkbox') return;
-    // Don't toggle if clicking on the drop button
-    if (event.target.classList.contains('btn-drop') || event.target.closest('.btn-drop')) return;
-    
-    const row = event.currentTarget;
-    const checkbox = row.querySelector('.student-checkbox');
-    if (checkbox) {
-        checkbox.checked = !checkbox.checked;
-        // Toggle highlight class
-        if (checkbox.checked) {
-            row.classList.add('selected-row');
-        } else {
-            row.classList.remove('selected-row');
-        }
-        // Trigger change event to update select all and count
-        $(checkbox).trigger('change');
-    }
-}
-
-function cancelSelectMode() {
-    if (selectMode) {
-        toggleSelectMode();
-    }
-}
-
-function toggleSelectAll() {
-    const selectAll = document.getElementById('selectAllCheckbox').checked;
-    document.querySelectorAll('.student-checkbox').forEach(cb => {
-        cb.checked = selectAll;
-        const row = cb.closest('tr');
-        if (selectAll) {
-            row.classList.add('selected-row');
-        } else {
-            row.classList.remove('selected-row');
-        }
-    });
-    updateSelectedCount();
-}
-
-function updateSelectedCount() {
-    const count = document.querySelectorAll('.student-checkbox:checked').length;
-    document.getElementById('selectedCount').textContent = count;
-}
-
-// Add change event to individual checkboxes
-$(document).on('change', '.student-checkbox', function() {
-    const row = $(this).closest('tr')[0];
-    if (this.checked) {
-        row.classList.add('selected-row');
-    } else {
-        row.classList.remove('selected-row');
-    }
-    
-    updateSelectedCount();
-    
-    // Update select all checkbox
-    const totalCheckboxes = document.querySelectorAll('.student-checkbox').length;
-    const checkedCheckboxes = document.querySelectorAll('.student-checkbox:checked').length;
-    document.getElementById('selectAllCheckbox').checked = totalCheckboxes === checkedCheckboxes;
-});
-
-function batchArchive() {
-    const selectedIds = [];
-    document.querySelectorAll('.student-checkbox:checked').forEach(cb => {
-        selectedIds.push(cb.value);
-    });
-    
-    if (selectedIds.length === 0) {
-        showModalToast('info', 'No students selected');
-        return;
-    }
-    
-    if (!confirm(`Archive ${selectedIds.length} selected student(s)?`)) return;
-    
-    // Here you would make an AJAX call to archive multiple students
-    // For now, we'll just show a message
-    showModalToast('success', `${selectedIds.length} student(s) archived successfully`);
-    
-    // Remove selected rows
-    selectedIds.forEach(id => {
-        $(`tr[data-id="${id}"]`).remove();
-    });
-    
-    // Exit select mode
-    toggleSelectMode();
-    updateStatsFromTable();
-}
-
-function batchDrop() {
-    const selectedIds = [];
-    document.querySelectorAll('.student-checkbox:checked').forEach(cb => {
-        selectedIds.push(cb.value);
-    });
-    
-    if (selectedIds.length === 0) {
-        showModalToast('info', 'No students selected');
-        return;
-    }
-    
-    if (!confirm(`Drop ${selectedIds.length} selected student(s)? This action cannot be undone!`)) return;
-    
-    // Make AJAX call to drop multiple students
-    const button = $('#batchActionBar .btn-expired');
-    const originalText = button.html();
-    button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Dropping...');
-    
-    let completed = 0;
-    selectedIds.forEach(id => {
-        $.ajax({
-            url: window.location.href,
-            method: 'POST',
-            data: {
-                action: 'drop_student',
-                student_id: id,
-                course_id: <?= $courseId ?>
-            },
-            dataType: 'json',
-            success: function(response) {
-                completed++;
-                if (response.success) {
-                    $(`tr[data-id="${id}"]`).remove();
-                }
-                if (completed === selectedIds.length) {
-                    button.prop('disabled', false).html('<i class="fas fa-user-minus"></i> Drop Selected');
-                    showModalToast('success', `${completed} student(s) dropped successfully`);
-                    toggleSelectMode();
-                    updateStatsFromTable();
-                }
-            },
-            error: function() {
-                completed++;
-                if (completed === selectedIds.length) {
-                    button.prop('disabled', false).html('<i class="fas fa-user-minus"></i> Drop Selected');
-                    showModalToast('error', 'Some students could not be dropped');
-                }
+            cb.checked = selectAll;
+            const row = cb.closest('tr');
+            if (selectAll) {
+                row.classList.add('selected-row');
+            } else {
+                row.classList.remove('selected-row');
             }
         });
+        updateSelectedCount();
+    }
+
+    function updateSelectedCount() {
+        const count = document.querySelectorAll('.student-checkbox:checked').length;
+        document.getElementById('selectedCount').textContent = count;
+    }
+
+    // Add change event to individual checkboxes
+    $(document).on('change', '.student-checkbox', function() {
+        const row = $(this).closest('tr')[0];
+        if (this.checked) {
+            row.classList.add('selected-row');
+        } else {
+            row.classList.remove('selected-row');
+        }
+        
+        updateSelectedCount();
+        
+        // Update select all checkbox
+        const totalCheckboxes = document.querySelectorAll('.student-checkbox').length;
+        const checkedCheckboxes = document.querySelectorAll('.student-checkbox:checked').length;
+        document.getElementById('selectAllCheckbox').checked = totalCheckboxes === checkedCheckboxes;
     });
-}
-        </script>
-    </body>
-    </html>
+    </script>
+</body>
+</html>

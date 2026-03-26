@@ -154,6 +154,11 @@ $admin_email = $admin['email'];
             </div>
             <?php endif; ?>
 
+            <div id="forgotMsg" class="forgot-message">
+                <i class="fas fa-info-circle"></i>
+                <span>Please contact the administrator to reset your password.</span>
+            </div>
+
             <!-- Login Form -->
             <form method="POST" action="" id="loginForm">
                 <!-- Username/Email -->
@@ -197,18 +202,20 @@ $admin_email = $admin['email'];
                     </div>
                 </div>
 
-                <!-- Remember me & Forgot password -->
-                <div class="options-row">
-                    <label class="remember-check">
-                        <input type="checkbox" name="remember" id="remember"> Remember me
-                    </label>
-                    <a href="forgot_password.php" class="forgot-link">Forgot password?</a>
+                <div style = "margin-bottom: 1rem;">
+                    <a href="#" class="forgot-link" 
+                        onclick="document.getElementById('forgotMsg').classList.add('show'); 
+                        setTimeout(function(){ document.getElementById('forgotMsg').classList.remove('show'); }, 5000); return false;">
+                        Forgot password?
+                    </a>
                 </div>
 
                 <!-- Login button -->
-                <button type="submit" class="login-btn">
-                    <i class="fas fa-sign-in-alt"></i> Sign In
-                </button>
+                <div>
+                    <button type="submit" class="login-btn">
+                        <i class="fas fa-sign-in-alt"></i> Sign In
+                    </button>
+                </div>
 
                 <!-- Sign up link -->
                 <div class="signup-prompt">
@@ -298,6 +305,20 @@ $admin_email = $admin['email'];
                 }, 2000);
             });
         }
+
+        // Auto-dismiss error message after 5 seconds
+        setTimeout(function() {
+            var errorMsg = document.getElementById('errorMessage');
+            if (errorMsg) {
+                errorMsg.style.display = 'none';
+            }
+            var forgotMsg = document.getElementById('forgotMsg');
+            if (forgotMsg && forgotMsg.classList.contains('show')) {
+                setTimeout(function() {
+                    forgotMsg.classList.remove('show');
+                }, 5000);
+            }
+        }, 100);
     </script>
 </body>
 </html>

@@ -152,18 +152,18 @@ function get_mini_role_badge($role) {
         default => strtoupper(substr($role, 0, 1))
     };
     
-    return "<span class='mini-role-badge $class' title='" . get_role_display_name($role) . "'>" . $displayText . "</span>";
+    // Use the global get_role_display_name function (defined in sidebar.php or functions.php)
+    if (function_exists('get_role_display_name')) {
+        $tooltip = get_role_display_name($role);
+    } else {
+        $tooltip = ucfirst($role);
+    }
+    
+    return "<span class='mini-role-badge $class' title='" . $tooltip . "'>" . $displayText . "</span>";
 }
 
-// Helper function for full role name (for tooltips)
-function get_role_display_name($role) {
-    return match($role) {
-        'proponent' => 'Instructor',
-        'admin' => 'Admin',
-        'superadmin' => 'Super Admin',
-        default => ucfirst($role)
-    };
-}
+// Note: get_role_display_name() is already defined in sidebar.php and functions.php
+// We'll use that function instead of redeclaring it
 ?>
 <!doctype html>
 <html lang="en">
@@ -394,4 +394,4 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 </body>
-</html>   
+</html>

@@ -21,8 +21,16 @@ function get_role_icon($role = '') {
     return $icons[$role] ?? 'fa-user';
 }
 
-// Note: get_role_display_name() is already defined in profile.php
-// We'll use that function directly
+// Function to get role display name (Student, Instructor, etc.)
+function get_role_display_name($role) {
+    $displayNames = [
+        'superadmin' => 'Super Admin',
+        'admin' => 'Admin',
+        'proponent' => 'Instructor',
+        'user' => 'Student',
+    ];
+    return $displayNames[$role] ?? ucfirst($role);
+}
 ?>
 
 <!doctype html>
@@ -78,12 +86,8 @@ function get_role_icon($role = '') {
                             </h6>
                             <small>
                                 <?php 
-                                // Use the function from profile.php
-                                if (function_exists('get_role_display_name')) {
-                                    echo htmlspecialchars(get_role_display_name($u['role'] ?? 'Guest'));
-                                } else {
-                                    echo htmlspecialchars(ucfirst($u['role'] ?? 'Guest'));
-                                }
+                                // Now using the function defined right here in sidebar.php
+                                echo htmlspecialchars(get_role_display_name($u['role'] ?? 'Guest'));
                                 ?>
                             </small>
                         </div>
@@ -123,7 +127,7 @@ function get_role_icon($role = '') {
                 <!-- All Courses (for students) -->
                 <li class="nav-item">
                     <a class="nav-link" href="<?= BASE_URL ?>/public/courses.php">
-                        <i class="fa fa-list"></i> All Courses
+                        <i class="fa fa-list"></i> Available Courses
                     </a>
                 </li>
                 <!-- My Courses (for students) -->

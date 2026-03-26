@@ -8,130 +8,149 @@ $userId = $user['id'] ?? 0;
 $isAdmin = is_admin();
 $isProponent = is_proponent();
 
-// Get all courses with their assessment info and enrollment status
-$stmt = $pdo->prepare("
-    SELECT 
-        c.id, 
-        c.title, 
-        c.description, 
-        c.summary,
-        c.thumbnail,
-        c.created_at, 
-        c.expires_at AS course_expires_at,
-        c.total_pages,
-        e.status AS enroll_status,
-        e.progress,
-        e.pages_viewed,
-        e.enrolled_at,
-        e.completed_at,
-        c.proponent_id,
-        u.fname as proponent_fname,
-        u.lname as proponent_lname,
-        CONCAT(u.fname, ' ', u.lname) as proponent_fullname,
-        -- Check if course has assessment
-        CASE 
-            WHEN a.id IS NOT NULL THEN 1 
-            ELSE 0 
-        END AS has_assessment,
-        a.id as assessment_id,
-        a.passing_score,
-        -- Get the latest assessment attempt score for this user
-        (
-            SELECT aa.score 
-            FROM assessment_attempts aa 
-            WHERE aa.assessment_id = a.id 
-            AND aa.user_id = ? 
-            AND aa.status = 'completed'
-            ORDER BY aa.completed_at DESC 
-            LIMIT 1
-        ) as latest_assessment_score,
-        -- Check if student passed assessment (compare score with passing_score)
-        CASE 
-            WHEN a.id IS NOT NULL THEN
-                CASE 
-                    WHEN EXISTS (
-                        SELECT 1 
-                        FROM assessment_attempts aa 
-                        WHERE aa.assessment_id = a.id 
-                        AND aa.user_id = ? 
-                        AND aa.status = 'completed'
-                        AND aa.score >= a.passing_score
-                    ) THEN 1
-                    ELSE 0
-                END
-            ELSE 0
-        END AS assessment_passed,
-        -- Determine REAL completion status based on our logic
-        CASE 
-            WHEN e.id IS NULL THEN 'notenrolled'
-            WHEN e.status = 'ongoing' AND c.expires_at IS NOT NULL AND c.expires_at < NOW() THEN 'expired'
-            ELSE
-                CASE 
-                    -- Has assessment: need both PDF complete AND at least one passing assessment score
-                    WHEN a.id IS NOT NULL THEN
-                        CASE 
-                            WHEN e.pages_viewed >= c.total_pages AND (
-                                SELECT COUNT(*) 
-                                FROM assessment_attempts aa 
-                                WHERE aa.assessment_id = a.id 
-                                AND aa.user_id = ? 
-                                AND aa.status = 'completed'
-                                AND aa.score >= a.passing_score
-                            ) > 0 THEN 'completed'
-                            ELSE 'ongoing'
-                        END
-                    -- No assessment: just need PDF complete
-                    ELSE
-                        CASE 
-                            WHEN e.pages_viewed >= c.total_pages THEN 'completed'
-                            ELSE 'ongoing'
-                        END
-                END
-        END AS display_status
-    FROM courses c
-    LEFT JOIN enrollments e ON e.course_id = c.id AND e.user_id = ?
-    LEFT JOIN users u ON c.proponent_id = u.id
-    LEFT JOIN assessments a ON a.course_id = c.id
-    WHERE c.is_active = 1
-    GROUP BY c.id
-    ORDER BY 
-        -- Show ongoing courses first, then completed, then not enrolled
-        CASE 
-            WHEN e.id IS NULL THEN 3
-            WHEN c.expires_at IS NOT NULL AND c.expires_at < NOW() THEN 4
-            WHEN (
-                (a.id IS NOT NULL AND e.pages_viewed >= c.total_pages AND (
-                    SELECT COUNT(*) 
-                    FROM assessment_attempts aa 
-                    WHERE aa.assessment_id = a.id 
-                    AND aa.user_id = ? 
-                    AND aa.status = 'completed'
-                    AND aa.score >= a.passing_score
-                ) > 0) OR
-                (a.id IS NULL AND e.pages_viewed >= c.total_pages)
-            ) THEN 2
-            ELSE 1
-        END,
-        c.id DESC
-");
-$stmt->execute([$userId, $userId, $userId, $userId, $userId]);
+// ===== PAGINATION SETUP =====
+$page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+$limit = 4; // 4 courses per page
+$offset = ($page - 1) * $limit;
+
+// ===== SEARCH SETUP =====
+$search = isset($_GET['search']) ? trim($_GET['search']) : '';
+
+// Get total count for pagination with search (EXCLUDE ALL ENROLLED COURSES - INCLUDING ARCHIVED)
+if (!empty($search)) {
+    $countStmt = $pdo->prepare("
+        SELECT COUNT(*) as total
+        FROM courses c
+        WHERE c.is_active = 1
+        AND NOT EXISTS (
+            SELECT 1 FROM enrollments e 
+            WHERE e.course_id = c.id 
+            AND e.user_id = :user_id
+        )
+        AND (c.title LIKE :search OR EXISTS (
+            SELECT 1 FROM users u WHERE u.id = c.proponent_id AND CONCAT(u.fname, ' ', u.lname) LIKE :search
+        ))
+    ");
+    $countStmt->bindValue(':user_id', $userId, PDO::PARAM_INT);
+    $countStmt->bindValue(':search', "%$search%", PDO::PARAM_STR);
+    $countStmt->execute();
+} else {
+    $countStmt = $pdo->prepare("
+        SELECT COUNT(*) as total
+        FROM courses c
+        WHERE c.is_active = 1
+        AND NOT EXISTS (
+            SELECT 1 FROM enrollments e 
+            WHERE e.course_id = c.id 
+            AND e.user_id = :user_id
+        )
+    ");
+    $countStmt->bindValue(':user_id', $userId, PDO::PARAM_INT);
+    $countStmt->execute();
+}
+$totalCount = $countStmt->fetch(PDO::FETCH_ASSOC)['total'];
+
+// Get only courses that the user has NEVER enrolled in (including archived)
+if (!empty($search)) {
+    $stmt = $pdo->prepare("
+        SELECT 
+            c.id, 
+            c.title, 
+            c.description, 
+            c.summary,
+            c.thumbnail,
+            c.created_at, 
+            c.expires_at AS course_expires_at,
+            c.total_pages,
+            c.proponent_id,
+            u.fname as proponent_fname,
+            u.lname as proponent_lname,
+            CONCAT(u.fname, ' ', u.lname) as proponent_fullname,
+            -- Check if course has assessment
+            CASE 
+                WHEN a.id IS NOT NULL THEN 1 
+                ELSE 0 
+            END AS has_assessment,
+            a.id as assessment_id,
+            a.passing_score,
+            'notenrolled' AS enroll_status,
+            NULL AS progress,
+            NULL AS pages_viewed,
+            NULL AS enrolled_at,
+            NULL AS completed_at,
+            NULL AS latest_assessment_score,
+            0 AS assessment_passed,
+            'notenrolled' AS display_status
+        FROM courses c
+        LEFT JOIN users u ON c.proponent_id = u.id
+        LEFT JOIN assessments a ON a.course_id = c.id
+        WHERE c.is_active = 1
+        AND NOT EXISTS (
+            SELECT 1 FROM enrollments e 
+            WHERE e.course_id = c.id 
+            AND e.user_id = :user_id
+        )
+        AND (c.title LIKE :search OR CONCAT(u.fname, ' ', u.lname) LIKE :search)
+        GROUP BY c.id
+        ORDER BY c.id DESC
+        LIMIT :limit OFFSET :offset
+    ");
+    $stmt->bindValue(':user_id', $userId, PDO::PARAM_INT);
+    $stmt->bindValue(':search', "%$search%", PDO::PARAM_STR);
+    $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+    $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+} else {
+    $stmt = $pdo->prepare("
+        SELECT 
+            c.id, 
+            c.title, 
+            c.description, 
+            c.summary,
+            c.thumbnail,
+            c.created_at, 
+            c.expires_at AS course_expires_at,
+            c.total_pages,
+            c.proponent_id,
+            u.fname as proponent_fname,
+            u.lname as proponent_lname,
+            CONCAT(u.fname, ' ', u.lname) as proponent_fullname,
+            -- Check if course has assessment
+            CASE 
+                WHEN a.id IS NOT NULL THEN 1 
+                ELSE 0 
+            END AS has_assessment,
+            a.id as assessment_id,
+            a.passing_score,
+            'notenrolled' AS enroll_status,
+            NULL AS progress,
+            NULL AS pages_viewed,
+            NULL AS enrolled_at,
+            NULL AS completed_at,
+            NULL AS latest_assessment_score,
+            0 AS assessment_passed,
+            'notenrolled' AS display_status
+        FROM courses c
+        LEFT JOIN users u ON c.proponent_id = u.id
+        LEFT JOIN assessments a ON a.course_id = c.id
+        WHERE c.is_active = 1
+        AND NOT EXISTS (
+            SELECT 1 FROM enrollments e 
+            WHERE e.course_id = c.id 
+            AND e.user_id = :user_id
+        )
+        GROUP BY c.id
+        ORDER BY c.id DESC
+        LIMIT :limit OFFSET :offset
+    ");
+    $stmt->bindValue(':user_id', $userId, PDO::PARAM_INT);
+    $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+    $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+}
+$stmt->execute();
 $courses = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// For debugging - you can remove this after testing
-/*
-echo "<pre>";
-foreach ($courses as $c) {
-    echo "Course: " . $c['title'] . "\n";
-    echo "Has Assessment: " . $c['has_assessment'] . "\n";
-    echo "Pages Viewed: " . $c['pages_viewed'] . "/" . $c['total_pages'] . "\n";
-    echo "Latest Score: " . ($c['latest_assessment_score'] ?? 'N/A') . "\n";
-    echo "Passing Score: " . ($c['passing_score'] ?? 'N/A') . "\n";
-    echo "Assessment Passed: " . $c['assessment_passed'] . "\n";
-    echo "Display Status: " . $c['display_status'] . "\n";
-    echo "------------------------\n";
-}
-echo "</pre>";
-*/
+// Calculate total pages
+$totalPages = ceil($totalCount / $limit);
 ?>
 
 <!doctype html>
@@ -146,480 +165,90 @@ echo "</pre>";
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/course.css">
 <style>
-/* ===== SHARP GEOMETRIC COURSES PAGE ===== */
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-}
-
-body {
-    font-family: 'Inter', Arial, sans-serif;
-    background: #eaf2fc;
-    min-height: 100vh;
+/* Pagination Styles */
+.pagination-container {
+    margin-top: 2rem;
     display: flex;
-}
-
-/* Sidebar */
-.lms-sidebar-container {
-    position: fixed;
-    left: 0;
-    top: 0;
-    width: 280px;
-    height: 100vh;
-    z-index: 1000;
-}
-
-/* Main Content */
-.modern-courses-wrapper {
-    margin-left: 280px;
-    flex: 1;
-    padding: 2rem 2.5rem;
-    min-height: 100vh;
-    overflow-y: auto;
-}
-
-/* Page Title */
-.modern-section-title {
-    font-size: 2.5rem;
-    font-weight: 700;
-    color: #07223b;
-    margin-bottom: 1.5rem;
-    border-left: 8px solid #1d6fb0;
-    padding-left: 1.2rem;
-}
-
-/* Controls Bar */
-.controls-bar {
-    display: flex;
-    justify-content: flex-end;
-    margin-bottom: 1.5rem;
-}
-
-/* Search Bar */
-.search-container {
-    display: flex;
-    align-items: center;
-    background: white;
-    border: 2px solid #1a4b77;
-    box-shadow: 4px 4px 0 #123a5e;
-    border-radius: 0px;
-    overflow: hidden;
-    width: 350px;
-}
-
-.search-input {
-    flex: 1;
-    padding: 0.7rem 1rem;
-    border: none;
-    font-family: 'Inter', sans-serif;
-    font-size: 0.95rem;
-    outline: none;
-    color: #07223b;
-}
-
-.search-input::placeholder {
-    color: #5f6f82;
-    opacity: 0.7;
-}
-
-.search-icon {
-    background: #1661a3;
-    border: none;
-    border-left: 2px solid #1a4b77;
-    padding: 0.7rem 1.2rem;
-    color: white;
-    display: flex;
-    align-items: center;
     justify-content: center;
-}
-
-/* Search Results Info */
-.search-info {
-    background: #f0f8ff;
-    border: 2px solid #b8d6f5;
-    box-shadow: 4px 4px 0 #a0c0e0;
-    padding: 0.8rem 1.2rem;
-    margin-bottom: 1rem;
-    display: none;
-    justify-content: space-between;
     align-items: center;
-    font-size: 0.9rem;
-    color: #1e4465;
+    gap: 1rem;
+    flex-wrap: wrap;
 }
 
-.search-info strong {
-    color: #07223b;
-}
-
-.search-info.visible {
-    display: flex;
-}
-
-/* Divider Line */
-.section-divider {
-    border: 0;
-    height: 3px;
-    background: #1d6fb0;
-    box-shadow: 2px 2px 0 #0f4980;
-    margin-bottom: 2rem;
-}
-
-/* Course Grid */
-.modern-courses-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-    gap: 1.5rem;
-    margin-top: 1.5rem;
-}
-
-/* Course Card */
-.modern-course-card {
-    background: #ffffff;
-    border: 3px solid #1a4b77;
-    border-top: none;
-    box-shadow: 8px 8px 0 #123a5e;
-    border-radius: 0px;
-    overflow: hidden;
-    transition: all 0.1s ease;
-    display: flex;
-    flex-direction: column;
-    height: 520px;
-}
-
-.modern-course-card:hover {
-    transform: translate(-2px, -2px);
-    box-shadow: 10px 10px 0 #123a5e;
-}
-
-/* Card Image */
-.modern-card-img {
-    height: 200px;
-    background: #d7e9ff;
-    border-bottom: 3px solid #1a4b77;
-    overflow: hidden;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    position: relative;
-    flex-shrink: 0;
-}
-
-.modern-card-img img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
-}
-
-/* Lock Overlay */
-.lock-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.6);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    font-size: 2.5rem;
-    backdrop-filter: blur(2px);
-}
-
-/* RIBBON STYLES */
-.course-ribbon {
-    width: 100%;
-    padding: 0.25rem 0;
-    text-align: center;
-    font-size: 0.7rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    border-bottom: 2px solid;
-    border-top: 2px solid;
-    flex-shrink: 0;
-}
-
-.ribbon-ongoing {
-    background: #ffc107;
-    border-color: #b88f1f;
-    color: #07223b;
-}
-
-.ribbon-completed {
-    background: #28a745;
-    border-color: #1e7e34;
-    color: white;
-}
-
-.ribbon-expired {
-    background: #6c757d;
-    border-color: #5a6268;
-    color: white;
-}
-
-/* Card Body */
-.modern-card-body {
-    padding: 1rem 1.2rem;
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-    overflow: hidden;
-}
-
-/* Title Section */
-.modern-card-title h6 {
-    font-weight: 700;
-    color: #07223b;
-    font-size: 1.1rem;
-    margin: 0 0 0.5rem 0;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    line-height: 1.3;
-    height: 2.6rem;
-}
-
-/* Description */
-.modern-card-body p {
-    color: #1e4465;
-    font-size: 0.85rem;
-    line-height: 1.4;
-    margin-bottom: 0.8rem;
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    height: 3.6rem;
-}
-
-/* Course Info Section */
-.modern-course-info {
-    background: #f0f8ff;
-    border: 2px solid #b8d6f5;
-    box-shadow: 4px 4px 0 #a0c0e0;
-    padding: 0.8rem;
-    margin-bottom: 0.8rem;
-    flex-shrink: 0;
-}
-
-.modern-course-info p {
-    margin-bottom: 0.3rem;
-    font-size: 0.75rem;
-    display: flex;
-    justify-content: space-between;
-    color: #1e4465;
-    height: auto;
-    -webkit-line-clamp: 1;
-}
-
-.modern-course-info strong {
-    color: #07223b;
-    font-weight: 600;
-}
-
-.modern-course-info i {
-    color: #1d6fb0;
-    width: 14px;
-    margin-right: 4px;
-}
-
-/* Action Buttons */
-.modern-card-actions {
+.pagination-nav {
     display: flex;
     gap: 0.5rem;
-    justify-content: center;
-    flex-wrap: wrap;
-    margin-top: auto;
-    padding-top: 0.5rem;
-    flex-shrink: 0;
-}
-
-/* Button Base Styles */
-.modern-btn-sm {
-    padding: 0.3rem 0.8rem;
-    font-size: 0.8rem;
-    font-weight: 600;
-    text-decoration: none;
-    border-radius: 0px;
-    transition: all 0.1s ease;
-    display: inline-flex;
     align-items: center;
-    justify-content: center;
-    gap: 4px;
-    border: 2px solid;
-    min-width: 70px;
+    flex-wrap: wrap;
 }
 
-/* Preview Button - BLUE */
-.modern-btn-warning {
-    background: #1d6fb0;
-    border-color: #0f4980;
-    box-shadow: 3px 3px 0 #0a3458;
+.pagination-link {
+    background: #1661a3;
+    border: 2px solid #0c314d;
+    box-shadow: 2px 2px 0 #0b263b;
+    padding: 0.4rem 0.8rem;
+    min-width: 36px;
+    text-align: center;
+    color: white;
+    text-decoration: none;
+    font-weight: 600;
+    transition: all 0.1s ease;
+    display: inline-block;
+}
+
+.pagination-link:hover {
+    transform: translate(-1px, -1px);
+    box-shadow: 3px 3px 0 #0b263b;
+    background: #1a70b5;
     color: white;
 }
 
-.modern-btn-warning:hover {
-    transform: translate(-2px, -2px);
-    box-shadow: 5px 5px 0 #0a3458;
-    background: #2680cf;
-    color: white;
-}
-
-/* Enroll/Continue Button - GREEN */
-.modern-btn-primary {
+.pagination-link.active {
     background: #28a745;
     border-color: #1e7e34;
-    box-shadow: 3px 3px 0 #166b2c;
+    box-shadow: 2px 2px 0 #166b2c;
+}
+
+.pagination-prev, .pagination-next {
+    background: #1661a3;
+    border: 2px solid #0c314d;
+    box-shadow: 2px 2px 0 #0b263b;
+    padding: 0.4rem 1rem;
     color: white;
-}
-
-.modern-btn-primary:hover {
-    transform: translate(-2px, -2px);
-    box-shadow: 5px 5px 0 #166b2c;
-    background: #34ce57;
-    color: white;
-}
-
-/* Tooltip Icons */
-.tooltip-icon, .tooltip-icon-ex {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 32px;
-    height: 32px;
-    background: white;
-    border: 2px solid;
-    box-shadow: 2px 2px 0 rgba(0,0,0,0.1);
-    border-radius: 0px;
-    cursor: help;
-}
-
-.tooltip-icon {
-    border-color: #ffc107;
-    color: #ffc107;
-}
-
-.tooltip-icon-ex {
-    border-color: #dc3545;
-    color: #dc3545;
-}
-
-/* Admin Edit Button */
-.btn-outline-secondary {
-    background: white;
-    border: 2px solid #6c757d;
-    box-shadow: 2px 2px 0 #5a6268;
-    color: #6c757d;
-    padding: 0.3rem 0.8rem;
-    font-size: 0.8rem;
     text-decoration: none;
-    border-radius: 0px;
+    font-weight: 600;
     transition: all 0.1s ease;
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: 6px;
 }
 
-.btn-outline-secondary:hover {
+.pagination-prev:hover, .pagination-next:hover {
     transform: translate(-1px, -1px);
-    box-shadow: 3px 3px 0 #5a6268;
-    background: #f8f9fa;
+    box-shadow: 3px 3px 0 #0b263b;
+    background: #1a70b5;
+    color: white;
 }
 
-/* Empty State */
-.alert-info {
-    background: #ffffff;
-    border: 3px solid #1a4b77;
-    box-shadow: 12px 12px 0 #123a5e;
-    border-radius: 0px;
-    padding: 3rem;
-    text-align: center;
+.pagination-disabled {
+    background: #6c757d;
+    border-color: #5a6268;
+    box-shadow: 2px 2px 0 #404040;
+    padding: 0.4rem 1rem;
+    color: white;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.page-info {
     color: #1e4465;
-    grid-column: 1 / -1;
-}
-
-.alert-info i {
-    font-size: 3rem;
-    color: #b8d6f5;
-    margin-bottom: 1rem;
-    display: block;
-}
-
-/* Empty State for search */
-.empty-state {
-    text-align: center;
-    padding: 3rem;
-    background: #ffffff;
-    border: 3px solid #1a4b77;
-    box-shadow: 12px 12px 0 #123a5e;
-    border-radius: 0px;
-    grid-column: 1 / -1;
-    display: none;
-}
-
-.empty-state.visible {
-    display: block;
-}
-
-.empty-state i {
-    font-size: 4rem;
-    color: #b8d6f5;
-    margin-bottom: 1rem;
-}
-
-.empty-state h4 {
-    color: #07223b;
-    font-weight: 700;
-    margin-bottom: 0.5rem;
-}
-
-.empty-state p {
-    color: #5f6f82;
-}
-
-/* Kitchen accent */
-.kitchen-accent {
-    display: flex;
-    justify-content: center;
-    gap: 1rem;
-    margin-top: 2rem;
-    opacity: 0.4;
-}
-
-.kitchen-accent i {
-    color: #1d6fb0;
     font-size: 0.9rem;
-}
-
-/* Responsive */
-@media (max-width: 768px) {
-    .modern-courses-wrapper {
-        margin-left: 0;
-        padding: 1rem;
-    }
-    .lms-sidebar-container {
-        position: relative;
-        width: 100%;
-        height: auto;
-    }
-    .modern-courses-grid {
-        grid-template-columns: 1fr;
-    }
-    .modern-course-card {
-        height: auto;
-        min-height: 520px;
-    }
-    .controls-bar {
-        justify-content: center;
-    }
-    .search-container {
-        width: 100%;
-    }
 }
 </style>
 </head>
@@ -632,26 +261,37 @@ body {
 
     <!-- Controls Bar - Search Bar only -->
     <div class="controls-bar">
-        <div class="search-container">
-            <input type="text" id="searchInput" class="search-input" placeholder="Search by title or instructor...">
-            <span class="search-icon"><i class="fas fa-search"></i></span>
-        </div>
+        <form method="GET" action="" style="display: flex; gap: 0.5rem; width: 100%; max-width: 350px;">
+            <div class="search-container" style="width: 100%;">
+                <input type="text" name="search" class="search-input" placeholder="Search by title or instructor..." value="<?= htmlspecialchars($search) ?>">
+                <button type="submit" class="search-icon" style="background: #1661a3; border: none; border-left: 2px solid #1a4b77; padding: 0.7rem 1.2rem; color: white; cursor: pointer;">
+                    <i class="fas fa-search"></i>
+                </button>
+            </div>
+            <?php if (!empty($search)): ?>
+                <a href="courses.php" class="btn-add" style="background: #6c757d; box-shadow: 3px 3px 0 #404040; text-decoration: none; padding: 0.6rem 1.2rem; color: white; display: inline-flex; align-items: center; gap: 6px;">
+                    <i class="fas fa-times"></i> Clear
+                </a>
+            <?php endif; ?>
+        </form>
     </div>
 
     <!-- Divider Line -->
     <hr class="section-divider">
 
     <!-- Search Results Info -->
-    <div class="search-info" id="searchInfo">
-        <span><i class="fas fa-search"></i> Search results for: <strong id="searchTerm"></strong></span>
-        <span id="resultCount"></span>
+    <?php if (!empty($search)): ?>
+    <div class="search-info visible">
+        <span><i class="fas fa-search"></i> Search results for: <strong><?= htmlspecialchars($search) ?></strong></span>
+        <span id="resultCount"><?= $totalCount ?> course(s) found</span>
     </div>
+    <?php endif; ?>
 
     <?php if (empty($courses)): ?>
     <div class="alert-info">
         <i class="fas fa-book-open"></i>
-        <h4>No Courses Available</h4>
-        <p>Check back later for new courses.</p>
+        <h4><?= !empty($search) ? 'No Matching Courses' : 'No Courses Available' ?></h4>
+        <p><?= !empty($search) ? 'No courses match your search criteria.' : 'Check back later for new courses.' ?></p>
     </div>
     <?php else: ?>
     <div class="modern-courses-grid" id="courseGrid">
@@ -662,43 +302,13 @@ body {
                 $isExpired = strtotime($c['course_expires_at']) < time();
             }
             
-            $enroll_status = $c['enroll_status'] ?? 'notenrolled';
-            $display_status = $c['display_status'] ?? $enroll_status;
-            
-            // Check if user can enroll in course
-            $canEnroll = ($enroll_status === 'notenrolled' && !$isExpired);
-            
-            // Check if user can continue course (ongoing only)
-            $canContinue = ($display_status === 'ongoing' && !$isExpired);
-            
-            // Check if user can review course (completed)
-            $canReview = ($display_status === 'completed' && !$isExpired);
-            
-            // Enrollment reason why btn is off
-            $enrollDisabledReason = '';
-            if ($enroll_status !== 'notenrolled') {
-                $enrollDisabledReason = 'You are already enrolled in this course';
-            } elseif ($isExpired) {
-                $enrollDisabledReason = 'This course has expired';
-            }
-            
-            // Determine ribbon style
+            // Determine ribbon style - only show expired ribbon for expired courses
             $showRibbon = false;
             $ribbonClass = '';
             $ribbonText = '';
             $ribbonIcon = '';
             
-            if ($display_status === 'ongoing') {
-                $showRibbon = true;
-                $ribbonClass = 'ribbon-ongoing';
-                $ribbonText = 'In Progress';
-                $ribbonIcon = 'fa-play-circle';
-            } elseif ($display_status === 'completed') {
-                $showRibbon = true;
-                $ribbonClass = 'ribbon-completed';
-                $ribbonText = 'Completed';
-                $ribbonIcon = 'fa-check-circle';
-            } elseif ($isExpired) {
+            if ($isExpired) {
                 $showRibbon = true;
                 $ribbonClass = 'ribbon-expired';
                 $ribbonText = 'Expired';
@@ -714,8 +324,8 @@ body {
                      alt="<?= htmlspecialchars($c['title']) ?>"
                      onerror="this.src='<?= BASE_URL ?>/uploads/images/Course Image.png'">
                 
-                <!-- lock overlay for expired not-enrolled courses -->
-                <?php if (!$canEnroll && $enroll_status === 'notenrolled' && !$isAdmin && $isExpired): ?>
+                <!-- lock overlay for expired courses -->
+                <?php if ($isExpired): ?>
                 <div class="lock-overlay">
                     <i class="fas fa-lock"></i>
                 </div>
@@ -741,16 +351,12 @@ body {
                 <!-- Course Info -->
                 <div class="modern-course-info">
                     <?php
-                    $startDate = !empty($c['created_at']) 
-                        ? date('M d, Y', strtotime($c['created_at']))
-                        : 'Not set';
                     
                     $expiryDate = 'No expiry';
                     if (!empty($c['course_expires_at']) && $c['course_expires_at'] != '0000-00-00') {
                         $expiryDate = date('M d, Y', strtotime($c['course_expires_at']));
                     }
                     ?>
-                    <p><strong><i class="fas fa-calendar-alt"></i> Start:</strong> <span><?= $startDate ?></span></p>
                     <p><strong><i class="fas fa-hourglass-half"></i> Expires:</strong> <span><?= $expiryDate ?></span></p>
                     
                     <!-- Show instructor name -->
@@ -774,37 +380,15 @@ body {
                             <i class="fas fa-info-circle"></i>
                         </span>
                         
-                    <?php elseif ($canContinue): ?>
-                        <!-- ONGOING - Show Continue button -->
-                        <a href="<?= BASE_URL ?>/public/course_view.php?id=<?= $c['id'] ?>"
-                           class="modern-btn-primary modern-btn-sm">
-                            <i class="fas fa-play-circle"></i> Continue
-                        </a>
-                        
-                    <?php elseif ($canReview): ?>
-                        <!-- COMPLETED - Show Review button -->
-                        <a href="<?= BASE_URL ?>/public/course_view.php?id=<?= $c['id'] ?>"
-                           class="modern-btn-primary modern-btn-sm">
-                            <i class="fas fa-redo-alt"></i> Review
-                        </a>
-                        
-                    <?php elseif ($enroll_status === 'notenrolled'): ?>
-                        <!-- NOT ENROLLED - Show Enroll button if possible -->
-                        <?php if ($canEnroll || $isAdmin): ?>
-                            <form method="POST" action="<?= BASE_URL ?>/public/enroll.php" style="display: inline;">
-                                <input type="hidden" name="course_id" value="<?= $c['id'] ?>">
-                                <button type="submit" class="modern-btn-primary modern-btn-sm" 
-                                    onclick="return confirm('Enroll in this course?');">
-                                    <i class="fas fa-sign-in-alt"></i> Enroll
-                                </button>
-                            </form>
-                        <?php else: ?>
-                            <!-- Disabled enroll button -->
-                            <span class="tooltip-icon" 
-                                  title="<?= htmlspecialchars($enrollDisabledReason) ?>">
-                                <i class="fas fa-info-circle"></i>
-                            </span>
-                        <?php endif; ?>
+                    <?php else: ?>
+                        <!-- NOT ENROLLED - Show Enroll button -->
+                        <form method="POST" action="<?= BASE_URL ?>/public/enroll.php" style="display: inline;">
+                            <input type="hidden" name="course_id" value="<?= $c['id'] ?>">
+                            <button type="submit" class="modern-btn-primary modern-btn-sm" 
+                                onclick="return confirm('Enroll in this course?');">
+                                <i class="fas fa-sign-in-alt"></i> Enroll
+                            </button>
+                        </form>
                     <?php endif; ?>
                     
                     <!-- ADMIN/PROPONENT EDIT BUTTON -->
@@ -817,11 +401,11 @@ body {
                     <?php endif; ?>
                 </div>
                 
-                <!-- Disabled reason message (for expired not-enrolled) -->
-                <?php if (!$canEnroll && $enroll_status === 'notenrolled' && !$isAdmin && $isExpired): ?>
+                <!-- Disabled reason message (for expired courses) -->
+                <?php if ($isExpired): ?>
                 <div class="mt-2 small text-muted text-center">
                     <i class="fas fa-info-circle"></i> 
-                    <?= htmlspecialchars($enrollDisabledReason) ?>
+                    This course has expired
                 </div>
                 <?php endif; ?>
             </div>
@@ -829,12 +413,46 @@ body {
         <?php endforeach; ?>
     </div>
 
-    <!-- Empty State for search -->
-    <div class="empty-state" id="emptyState">
-        <i class="fas fa-search"></i>
-        <h4>No Matching Courses</h4>
-        <p id="emptyStateMessage">No courses match your search criteria.</p>
+    <!-- Pagination Navigation -->
+    <?php if ($totalPages > 1 && !empty($courses)): ?>
+    <div class="pagination-container">
+        <div class="pagination-nav">
+            <!-- Previous Button -->
+            <?php if ($page > 1): ?>
+                <a href="?page=<?= $page - 1 ?>&search=<?= urlencode($search) ?>" class="pagination-prev">
+                    <i class="fas fa-chevron-left"></i> Previous
+                </a>
+            <?php else: ?>
+                <span class="pagination-disabled">
+                    <i class="fas fa-chevron-left"></i> Previous
+                </span>
+            <?php endif; ?>
+            
+            <!-- Page Numbers -->
+            <?php for ($i = 1; $i <= $totalPages; $i++): ?>
+                <?php if ($i == $page): ?>
+                    <span class="pagination-link active"><?= $i ?></span>
+                <?php else: ?>
+                    <a href="?page=<?= $i ?>&search=<?= urlencode($search) ?>" class="pagination-link">
+                        <?= $i ?>
+                    </a>
+                <?php endif; ?>
+            <?php endfor; ?>
+            
+            <!-- Next Button -->
+            <?php if ($page < $totalPages): ?>
+                <a href="?page=<?= $page + 1 ?>&search=<?= urlencode($search) ?>" class="pagination-next">
+                    Next <i class="fas fa-chevron-right"></i>
+                </a>
+            <?php else: ?>
+                <span class="pagination-disabled">
+                    Next <i class="fas fa-chevron-right"></i>
+                </span>
+            <?php endif; ?>
+        </div>
     </div>
+    <?php endif; ?>
+
     <?php endif; ?>
 
     <!-- Kitchen accent -->
@@ -854,64 +472,6 @@ document.addEventListener('DOMContentLoaded', function() {
     var tooltipList = tooltipTriggerList.map(function(tooltipTriggerEl) {
         return new bootstrap.Tooltip(tooltipTriggerEl);
     });
-
-    // Real-time search functionality
-    const searchInput = document.getElementById('searchInput');
-    const courseCards = document.querySelectorAll('.modern-course-card');
-    const courseGrid = document.getElementById('courseGrid');
-    const emptyState = document.getElementById('emptyState');
-    const searchInfo = document.getElementById('searchInfo');
-    const searchTermSpan = document.getElementById('searchTerm');
-    const resultCountSpan = document.getElementById('resultCount');
-
-    if (searchInput) {
-        searchInput.addEventListener('input', function() {
-            const searchTerm = this.value.toLowerCase().trim();
-            let visibleCount = 0;
-            
-            // Update search info
-            if (searchTerm.length > 0) {
-                searchInfo.classList.add('visible');
-                searchTermSpan.textContent = this.value;
-            } else {
-                searchInfo.classList.remove('visible');
-            }
-            
-            // Filter courses
-            courseCards.forEach(card => {
-                const title = card.dataset.title || '';
-                const instructor = card.dataset.instructor || '';
-                
-                if (title.includes(searchTerm) || instructor.includes(searchTerm)) {
-                    card.style.display = 'flex';
-                    visibleCount++;
-                } else {
-                    card.style.display = 'none';
-                }
-            });
-            
-            // Update result count
-            resultCountSpan.textContent = visibleCount + ' course(s) found';
-            
-            // Show/hide empty state
-            if (visibleCount === 0 && searchTerm.length > 0) {
-                emptyState.classList.add('visible');
-                if (courseGrid) courseGrid.style.display = 'none';
-            } else {
-                emptyState.classList.remove('visible');
-                if (courseGrid) courseGrid.style.display = 'grid';
-            }
-            
-            // If search is cleared, show all
-            if (searchTerm.length === 0) {
-                courseCards.forEach(card => {
-                    card.style.display = 'flex';
-                });
-                if (courseGrid) courseGrid.style.display = 'grid';
-                emptyState.classList.remove('visible');
-            }
-        });
-    }
 });
 </script>
 </body>

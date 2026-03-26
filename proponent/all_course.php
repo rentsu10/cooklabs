@@ -12,25 +12,80 @@ exit('Access denied');
 
 $act = $_GET['act'] ?? '';
 
+// ===== PAGINATION SETUP =====
+$page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+$limit = 4; // 4 courses per page
+$offset = ($page - 1) * $limit;
+
+// ===== SEARCH SETUP =====
+$search = isset($_GET['search']) ? trim($_GET['search']) : '';
+
 /* =========================
-FETCH ALL COURSES WITH USER INFO
+FETCH ALL COURSES WITH USER INFO WITH PAGINATION AND SEARCH
 ========================= */
 
-// Build query for all courses with user full name
-$sql = "
-SELECT c.*, 
-       CONCAT(u.fname, ' ', u.lname) as proponent_fullname,
-       CASE WHEN c.proponent_id = :user_id THEN 1 ELSE 0 END as is_owner
-FROM courses c 
-LEFT JOIN users u ON c.proponent_id = u.id 
-WHERE c.is_active = 1
-ORDER BY c.created_at DESC
-";
+// Get total count for pagination with search
+if (!empty($search)) {
+    $countSql = "
+        SELECT COUNT(*) as total
+        FROM courses c 
+        LEFT JOIN users u ON c.proponent_id = u.id 
+        WHERE c.is_active = 1 
+        AND (c.title LIKE :search OR CONCAT(u.fname, ' ', u.lname) LIKE :search)
+    ";
+    $countStmt = $pdo->prepare($countSql);
+    $countStmt->execute([':search' => "%$search%"]);
+} else {
+    $countSql = "
+        SELECT COUNT(*) as total
+        FROM courses c 
+        LEFT JOIN users u ON c.proponent_id = u.id 
+        WHERE c.is_active = 1
+    ";
+    $countStmt = $pdo->prepare($countSql);
+    $countStmt->execute();
+}
+$totalCount = $countStmt->fetch(PDO::FETCH_ASSOC)['total'];
 
-$stmt = $pdo->prepare($sql);
-$stmt->bindParam(':user_id', $_SESSION['user']['id']);
+// Build query for all courses with user full name with pagination and search
+if (!empty($search)) {
+    $sql = "
+        SELECT c.*, 
+               CONCAT(u.fname, ' ', u.lname) as proponent_fullname,
+               CASE WHEN c.proponent_id = :user_id THEN 1 ELSE 0 END as is_owner
+        FROM courses c 
+        LEFT JOIN users u ON c.proponent_id = u.id 
+        WHERE c.is_active = 1 
+        AND (c.title LIKE :search OR CONCAT(u.fname, ' ', u.lname) LIKE :search)
+        ORDER BY c.created_at DESC
+        LIMIT :limit OFFSET :offset
+    ";
+    $stmt = $pdo->prepare($sql);
+    $stmt->bindParam(':user_id', $_SESSION['user']['id'], PDO::PARAM_INT);
+    $stmt->bindValue(':search', "%$search%", PDO::PARAM_STR);
+    $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+    $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+} else {
+    $sql = "
+        SELECT c.*, 
+               CONCAT(u.fname, ' ', u.lname) as proponent_fullname,
+               CASE WHEN c.proponent_id = :user_id THEN 1 ELSE 0 END as is_owner
+        FROM courses c 
+        LEFT JOIN users u ON c.proponent_id = u.id 
+        WHERE c.is_active = 1
+        ORDER BY c.created_at DESC
+        LIMIT :limit OFFSET :offset
+    ";
+    $stmt = $pdo->prepare($sql);
+    $stmt->bindParam(':user_id', $_SESSION['user']['id'], PDO::PARAM_INT);
+    $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+    $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+}
 $stmt->execute();
 $courses = $stmt->fetchAll();
+
+// Calculate total pages
+$totalPages = ceil($totalCount / $limit);
 ?>
 
 <!DOCTYPE html>
@@ -45,392 +100,7 @@ $courses = $stmt->fetchAll();
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
-<style>
-/* ===== SHARP GEOMETRIC COURSE MANAGEMENT ===== */
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-}
-
-body {
-    font-family: 'Inter', Arial, sans-serif;
-    background: #eaf2fc;
-    min-height: 100vh;
-    display: flex;
-}
-
-/* Sidebar */
-.lms-sidebar-container {
-    position: fixed;
-    left: 0;
-    top: 0;
-    width: 280px;
-    height: 100vh;
-    z-index: 1000;
-}
-
-/* Main Content */
-.modern-courses-wrapper {
-    margin-left: 280px;
-    flex: 1;
-    padding: 2rem 2.5rem;
-    min-height: 100vh;
-    overflow-y: auto;
-}
-
-/* Page Title */
-.page-title {
-    font-size: 2.5rem;
-    font-weight: 700;
-    color: #07223b;
-    margin-bottom: 2rem;
-    border-left: 8px solid #1d6fb0;
-    padding-left: 1.2rem;
-}
-
-/* Controls Bar - Search Bar Only (right-aligned) */
-.controls-bar {
-    display: flex;
-    justify-content: flex-end;
-    align-items: center;
-    margin-bottom: 1.5rem;
-}
-
-/* Search Bar */
-.search-container {
-    display: flex;
-    align-items: center;
-    background: white;
-    border: 2px solid #1a4b77;
-    box-shadow: 4px 4px 0 #123a5e;
-    border-radius: 0px;
-    overflow: hidden;
-    width: 350px;
-}
-
-.search-input {
-    flex: 1;
-    padding: 0.7rem 1rem;
-    border: none;
-    font-family: 'Inter', sans-serif;
-    font-size: 0.95rem;
-    outline: none;
-    color: #07223b;
-}
-
-.search-input::placeholder {
-    color: #5f6f82;
-    opacity: 0.7;
-}
-
-.search-icon {
-    background: #1661a3;
-    border: none;
-    border-left: 2px solid #1a4b77;
-    padding: 0.7rem 1.2rem;
-    color: white;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-/* Divider Line */
-.section-divider {
-    border: 0;
-    height: 3px;
-    background: #1d6fb0;
-    box-shadow: 2px 2px 0 #0f4980;
-    margin-bottom: 2rem;
-}
-
-/* RIBBON STYLES - Full width strip between thumbnail and title */
-.course-ribbon {
-    width: 100%;
-    padding: 0.25rem 0;
-    text-align: center;
-    font-size: 0.7rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    border-bottom: 2px solid;
-    border-top: 2px solid;
-    flex-shrink: 0;
-}
-
-.ribbon-expired {
-    background: #6c757d;
-    border-color: #5a6268;
-    color: white;
-}
-
-/* Course Grid */
-.course-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-    gap: 1.5rem;
-}
-
-/* Course Card - Fixed height (increased to accommodate ribbon) */
-.course-card {
-    background: #ffffff;
-    border: 3px solid #1a4b77;
-    border-top: none;
-    box-shadow: 8px 8px 0 #123a5e;
-    border-radius: 0px;
-    overflow: hidden;
-    transition: all 0.1s ease;
-    height: 530px; /* Increased from 500px to accommodate ribbon */
-    display: flex;
-    flex-direction: column;
-}
-
-.course-card:hover {
-    transform: translate(-2px, -2px);
-    box-shadow: 10px 10px 0 #123a5e;
-}
-
-/* Optional: Add red border for expired courses */
-.course-card.expired {
-    border-color: #565656;
-    box-shadow: 8px 8px 0 #3e3e3e;
-}
-
-.course-card.expired:hover {
-    box-shadow: 10px 10px 0 #b02a37;
-}
-
-/* Thumbnail Container - Fixed height */
-.course-card-img {
-    height: 200px;
-    background: #d7e9ff;
-    border-bottom: 3px solid #1a4b77;
-    overflow: hidden;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-}
-
-.course-card-img img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
-}
-
-/* Card Body - Takes remaining space */
-.course-card-body {
-    padding: 1.2rem;
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-}
-
-/* Title - Exactly 2 lines max */
-.course-card-title {
-    margin-bottom: 0.5rem;
-    height: 2.8rem;
-    overflow: hidden;
-}
-
-.course-card-title h6 {
-    font-weight: 700;
-    color: #07223b;
-    font-size: 1.1rem;
-    line-height: 1.4;
-    margin: 0;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-/* Description - Exactly 2 lines max */
-.course-card-body p {
-    color: #1e4465;
-    font-size: 0.85rem;
-    line-height: 1.4;
-    margin-bottom: 0.8rem;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    height: 2.4rem;
-}
-
-/* Course Info - Fixed height */
-.course-info {
-    background: #f0f8ff;
-    border: 2px solid #b8d6f5;
-    padding: 0.8rem;
-    margin-bottom: 0.8rem;
-    flex-shrink: 0;
-    height: 115px;
-}
-
-.course-info p {
-    margin-bottom: 0.3rem;
-    font-size: 0.8rem;
-    display: flex;
-    justify-content: space-between;
-    height: auto;
-    -webkit-line-clamp: 1;
-    overflow: visible;
-}
-
-.course-info .instructor {
-    color: #1d6fb0;
-    font-weight: 600;
-    font-size: 0.8rem;
-    margin-top: 0.2rem;
-    padding-top: 0.2rem;
-    border-top: 1px dashed #b8d6f5;
-}
-
-.course-info .instructor i {
-    color: #1d6fb0;
-    margin-right: 4px;
-}
-
-/* Owner indicator */
-.owner-indicator {
-    color: #1d6fb0;
-    font-weight: 600;
-    font-size: 0.75rem;
-    margin-top: 0.2rem;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-}
-
-.owner-indicator i {
-    color: #1d6fb0;
-}
-
-/* Action Buttons - Only View button */
-.action-group {
-    display: flex;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: center;
-    margin-top: auto;
-    padding-top: 0.5rem;
-    flex-shrink: 0;
-}
-
-.btn-view {
-    background: #1661a3;
-    border: 2px solid #0c314d;
-    box-shadow: 3px 3px 0 #0b263b;
-    color: white;
-    padding: 0.3rem 0.8rem;
-    font-size: 0.8rem;
-    font-weight: 600;
-    text-decoration: none;
-    border-radius: 0px;
-    transition: all 0.1s ease;
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-}
-
-.btn-view:hover {
-    transform: translate(-1px, -1px);
-    box-shadow: 4px 4px 0 #0b263b;
-    background: #1a70b5;
-    color: white;
-}
-
-/* Empty State */
-.empty-state {
-    text-align: center;
-    padding: 3rem;
-    background: #ffffff;
-    border: 3px solid #1a4b77;
-    box-shadow: 12px 12px 0 #123a5e;
-    border-radius: 0px;
-    grid-column: 1 / -1;
-}
-
-.empty-state i {
-    font-size: 4rem;
-    color: #b8d6f5;
-    margin-bottom: 1rem;
-}
-
-.empty-state h4 {
-    color: #07223b;
-    font-weight: 700;
-    margin-bottom: 0.5rem;
-}
-
-.empty-state p {
-    color: #5f6f82;
-}
-
-/* Search Results Info */
-.search-info {
-    background: #f0f8ff;
-    border: 2px solid #b8d6f5;
-    box-shadow: 4px 4px 0 #a0c0e0;
-    padding: 0.8rem 1.2rem;
-    margin-bottom: 1.5rem;
-    display: none;
-    justify-content: space-between;
-    align-items: center;
-    font-size: 0.9rem;
-    color: #1e4465;
-}
-
-.search-info strong {
-    color: #07223b;
-}
-
-.search-info.visible {
-    display: flex;
-}
-
-/* Kitchen accent */
-.kitchen-accent {
-    display: flex;
-    justify-content: center;
-    gap: 1rem;
-    margin-top: 2rem;
-    opacity: 0.4;
-}
-
-.kitchen-accent i {
-    color: #1d6fb0;
-    font-size: 0.9rem;
-}
-
-/* Responsive */
-@media (max-width: 768px) {
-    .modern-courses-wrapper {
-        margin-left: 0;
-        padding: 1rem;
-    }
-    .lms-sidebar-container {
-        position: relative;
-        width: 100%;
-        height: auto;
-    }
-    .controls-bar {
-        justify-content: flex-end;
-    }
-    .search-container {
-        width: 100%;
-    }
-    .course-card {
-        height: auto;
-        min-height: 530px;
-    }
-}
-</style>
+<link rel="stylesheet" href="../assets/css/allcourses.css">
 </head>
 <body>
 
@@ -446,29 +116,39 @@ body {
 
 <!-- Controls Bar - Search Bar Only (right-aligned) -->
 <div class="controls-bar">
-    <!-- Search Bar -->
-    <div class="search-container">
-        <input type="text" id="searchInput" class="search-input" placeholder="Search by title or instructor...">
-        <span class="search-icon"><i class="fas fa-search"></i></span>
-    </div>
+    <form method="GET" action="" style="display: flex; gap: 0.5rem; width: 100%; max-width: 350px;">
+        <div class="search-container" style="width: 100%;">
+            <input type="text" name="search" class="search-input" placeholder="Search by title or instructor..." value="<?= htmlspecialchars($search) ?>">
+            <button type="submit" class="search-icon" style="background: #1661a3; border: none; border-left: 2px solid #1a4b77; padding: 0.7rem 1.2rem; color: white; cursor: pointer;">
+                <i class="fas fa-search"></i>
+            </button>
+        </div>
+        <?php if (!empty($search)): ?>
+            <a href="all_course.php" class="btn-add" style="background: #6c757d; box-shadow: 3px 3px 0 #404040; text-decoration: none; padding: 0.6rem 1.2rem; color: white; display: inline-flex; align-items: center; gap: 6px;">
+                <i class="fas fa-times"></i> Clear
+            </a>
+        <?php endif; ?>
+    </form>
 </div>
 
 <!-- Divider Line -->
 <hr class="section-divider">
 
 <!-- Search Results Info -->
-<div class="search-info" id="searchInfo">
-    <span><i class="fas fa-search"></i> Search results for: <strong id="searchTerm"></strong></span>
-    <span id="resultCount"></span>
+<?php if (!empty($search)): ?>
+<div class="search-info visible">
+    <span><i class="fas fa-search"></i> Search results for: <strong><?= htmlspecialchars($search) ?></strong></span>
+    <span id="resultCount"><?= $totalCount ?> course(s) found</span>
 </div>
+<?php endif; ?>
 
 <!-- Course Grid -->
 <div class="course-grid" id="courseGrid">
     <?php if (empty($courses)): ?>
     <div class="empty-state">
         <i class="fas fa-book-open"></i>
-        <h4>No Courses Available</h4>
-        <p>There are no courses to display at the moment.</p>
+        <h4><?= !empty($search) ? 'No Matching Courses' : 'No Courses Available' ?></h4>
+        <p><?= !empty($search) ? 'No courses match your search criteria.' : 'There are no courses to display at the moment.' ?></p>
     </div>
     <?php else: ?>
         <?php foreach ($courses as $c): 
@@ -529,13 +209,47 @@ body {
     <?php endif; ?>
 </div>
 
-<!-- Empty State for search (hidden by default) -->
-<div class="empty-state" id="emptyState" style="display: none;">
-    <i class="fas fa-search"></i>
-    <h4>No Matching Courses</h4>
-    <p id="emptyStateMessage">No courses match your search criteria.</p>
+<!-- Pagination Navigation -->
+<?php if ($totalPages > 1 && !empty($courses)): ?>
+<div class="pagination-container">
+    <div class="pagination-nav">
+        <!-- Previous Button -->
+        <?php if ($page > 1): ?>
+            <a href="?page=<?= $page - 1 ?>&search=<?= urlencode($search) ?><?= $act ? '&act=' . $act : '' ?>" class="pagination-prev">
+                <i class="fas fa-chevron-left"></i> Previous
+            </a>
+        <?php else: ?>
+            <span class="pagination-disabled">
+                <i class="fas fa-chevron-left"></i> Previous
+            </span>
+        <?php endif; ?>
+        
+        <!-- Page Numbers -->
+        <?php for ($i = 1; $i <= $totalPages; $i++): ?>
+            <?php if ($i == $page): ?>
+                <span class="pagination-link active"><?= $i ?></span>
+            <?php else: ?>
+                <a href="?page=<?= $i ?>&search=<?= urlencode($search) ?><?= $act ? '&act=' . $act : '' ?>" class="pagination-link">
+                    <?= $i ?>
+                </a>
+            <?php endif; ?>
+        <?php endfor; ?>
+        
+        <!-- Next Button -->
+        <?php if ($page < $totalPages): ?>
+            <a href="?page=<?= $page + 1 ?>&search=<?= urlencode($search) ?><?= $act ? '&act=' . $act : '' ?>" class="pagination-next">
+                Next <i class="fas fa-chevron-right"></i>
+            </a>
+        <?php else: ?>
+            <span class="pagination-disabled">
+                Next <i class="fas fa-chevron-right"></i>
+            </span>
+        <?php endif; ?>
+    </div>  
 </div>
+<?php endif; ?>
 
+<!-- Empty State for search (hidden by default) - REMOVED since we now use server-side search -->
 <!-- Kitchen accent -->
 <div class="kitchen-accent">
     <i class="fas fa-cube"></i>
@@ -549,63 +263,7 @@ body {
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    // Real-time search functionality
-    const searchInput = document.getElementById('searchInput');
-    const courseCards = document.querySelectorAll('.course-card');
-    const courseGrid = document.getElementById('courseGrid');
-    const emptyState = document.getElementById('emptyState');
-    const searchInfo = document.getElementById('searchInfo');
-    const searchTermSpan = document.getElementById('searchTerm');
-    const resultCountSpan = document.getElementById('resultCount');
-
-    if (searchInput) {
-        searchInput.addEventListener('input', function() {
-            const searchTerm = this.value.toLowerCase().trim();
-            let visibleCount = 0;
-            
-            // Update search info
-            if (searchTerm.length > 0) {
-                searchInfo.classList.add('visible');
-                searchTermSpan.textContent = this.value;
-            } else {
-                searchInfo.classList.remove('visible');
-            }
-            
-            // Filter courses
-            courseCards.forEach(card => {
-                const title = card.dataset.title || '';
-                const instructor = card.dataset.instructor || '';
-                
-                if (title.includes(searchTerm) || instructor.includes(searchTerm)) {
-                    card.style.display = 'flex';
-                    visibleCount++;
-                } else {
-                    card.style.display = 'none';
-                }
-            });
-            
-            // Update result count
-            resultCountSpan.textContent = visibleCount + ' course(s) found';
-            
-            // Show/hide empty state
-            if (visibleCount === 0 && searchTerm.length > 0) {
-                emptyState.style.display = 'block';
-                courseGrid.style.display = 'none';
-            } else {
-                emptyState.style.display = 'none';
-                courseGrid.style.display = 'grid';
-            }
-            
-            // If search is cleared, show all
-            if (searchTerm.length === 0) {
-                courseCards.forEach(card => {
-                    card.style.display = 'flex';
-                });
-                courseGrid.style.display = 'grid';
-                emptyState.style.display = 'none';
-            }
-        });
-    }
+    // No client-side search needed anymore - search is handled server-side
 });
 </script>
 

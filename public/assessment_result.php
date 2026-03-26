@@ -8,7 +8,7 @@ $u = current_user();
 
 $attemptId = intval($_GET['attempt_id'] ?? 0);
 if (!$attemptId) {
-    header('Location: ../index.php');
+    header('Location: ../public/course_view.php');
     exit;
 }
 
@@ -678,7 +678,7 @@ function getOptionText($question, $letter) {
                     </span>
                 <?php endif; ?>
 
-                <a href="../index.php" class="btn-secondary">
+                <a href="../public/dashboard.php" class="btn-secondary">
                     <i class="fas fa-home"></i> Go to Dashboard
                 </a>
             </div>

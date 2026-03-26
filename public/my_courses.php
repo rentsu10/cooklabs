@@ -5,121 +5,269 @@ require_login();
 
 $userId = $_SESSION['user']['id'];
 
-// Fetch only courses the student is enrolled in with assessment info
-// Using the same robust logic as courses.php
-$stmt = $pdo->prepare("
-    SELECT 
-        c.id, 
-        c.title, 
-        c.description, 
-        c.thumbnail, 
-        c.created_at, 
-        c.expires_at,
-        c.total_pages,
-        e.progress, 
-        e.pages_viewed,
-        -- Check if course has assessment
-        CASE 
-            WHEN a.id IS NOT NULL THEN 1 
-            ELSE 0 
-        END AS has_assessment,
-        a.id as assessment_id,
-        a.passing_score,
-        -- Get the latest assessment attempt score for this user
-        (
-            SELECT aa.score 
-            FROM assessment_attempts aa 
-            WHERE aa.assessment_id = a.id 
-            AND aa.user_id = ? 
-            AND aa.status = 'completed'
-            ORDER BY aa.completed_at DESC 
-            LIMIT 1
-        ) as latest_assessment_score,
-        -- Check if student passed assessment (compare score with passing_score)
-        CASE 
-            WHEN a.id IS NOT NULL THEN
-                CASE 
-                    WHEN EXISTS (
-                        SELECT 1 
+// ===== PAGINATION SETUP =====
+$page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+$limit = 4; // 4 courses per page
+$offset = ($page - 1) * $limit;
+
+// ===== SEARCH SETUP =====
+$search = isset($_GET['search']) ? trim($_GET['search']) : '';
+
+// Get total count of enrolled courses for this user with search (EXCLUDING ARCHIVED)
+if (!empty($search)) {
+    $countStmt = $pdo->prepare("
+        SELECT COUNT(*) as total
+        FROM enrollments e
+        JOIN courses c ON e.course_id = c.id
+        LEFT JOIN users u ON c.proponent_id = u.id
+        WHERE e.user_id = :user_id
+        AND e.is_archived = 0
+        AND (c.title LIKE :search OR CONCAT(u.fname, ' ', u.lname) LIKE :search)
+    ");
+    $countStmt->bindValue(':user_id', $userId, PDO::PARAM_INT);
+    $countStmt->bindValue(':search', "%$search%", PDO::PARAM_STR);
+    $countStmt->execute();
+} else {
+    $countStmt = $pdo->prepare("
+        SELECT COUNT(*) as total
+        FROM enrollments e
+        WHERE e.user_id = :user_id AND e.is_archived = 0
+    ");
+    $countStmt->bindValue(':user_id', $userId, PDO::PARAM_INT);
+    $countStmt->execute();
+}
+$totalCount = $countStmt->fetch(PDO::FETCH_ASSOC)['total'];
+
+// Fetch only courses the student is enrolled in with assessment info (EXCLUDING ARCHIVED)
+if (!empty($search)) {
+    $stmt = $pdo->prepare("
+        SELECT 
+            c.id, 
+            c.title, 
+            c.description, 
+            c.thumbnail, 
+            c.created_at, 
+            c.expires_at,
+            c.total_pages,
+            e.progress, 
+            e.pages_viewed,
+            u.fname as proponent_fname,
+            u.lname as proponent_lname,
+            CONCAT(u.fname, ' ', u.lname) as proponent_fullname,
+            -- Check if course has assessment
+            CASE 
+                WHEN a.id IS NOT NULL THEN 1 
+                ELSE 0 
+            END AS has_assessment,
+            a.id as assessment_id,
+            a.passing_score,
+            -- Get the latest assessment attempt score for this user
+            (
+                SELECT aa.score 
+                FROM assessment_attempts aa 
+                WHERE aa.assessment_id = a.id 
+                AND aa.user_id = :user_id1 
+                AND aa.status = 'completed'
+                ORDER BY aa.completed_at DESC 
+                LIMIT 1
+            ) as latest_assessment_score,
+            -- Check if student passed assessment (compare score with passing_score)
+            CASE 
+                WHEN a.id IS NOT NULL THEN
+                    CASE 
+                        WHEN EXISTS (
+                            SELECT 1 
+                            FROM assessment_attempts aa 
+                            WHERE aa.assessment_id = a.id 
+                            AND aa.user_id = :user_id2 
+                            AND aa.status = 'completed'
+                            AND aa.score >= a.passing_score
+                        ) THEN 1
+                        ELSE 0
+                    END
+                ELSE 0
+            END AS assessment_passed,
+            -- Determine REAL completion status based on our logic
+            CASE 
+                WHEN e.status = 'ongoing' AND c.expires_at IS NOT NULL AND c.expires_at < NOW() THEN 'expired'
+                ELSE
+                    CASE 
+                        -- Has assessment: need both PDF complete AND at least one passing assessment score
+                        WHEN a.id IS NOT NULL THEN
+                            CASE 
+                                WHEN e.pages_viewed >= c.total_pages AND (
+                                    SELECT COUNT(*) 
+                                    FROM assessment_attempts aa 
+                                    WHERE aa.assessment_id = a.id 
+                                    AND aa.user_id = :user_id3 
+                                    AND aa.status = 'completed'
+                                    AND aa.score >= a.passing_score
+                                ) > 0 THEN 'completed'
+                                ELSE 'ongoing'
+                            END
+                        -- No assessment: just need PDF complete
+                        ELSE
+                            CASE 
+                                WHEN e.pages_viewed >= c.total_pages THEN 'completed'
+                                ELSE 'ongoing'
+                            END
+                    END
+            END AS display_status
+        FROM courses c
+        JOIN enrollments e ON e.course_id = c.id AND e.user_id = :user_id4
+        LEFT JOIN users u ON c.proponent_id = u.id
+        LEFT JOIN assessments a ON a.course_id = c.id
+        WHERE e.user_id = :user_id5
+        AND e.is_archived = 0
+        AND (c.title LIKE :search OR CONCAT(u.fname, ' ', u.lname) LIKE :search)
+        GROUP BY c.id
+        ORDER BY 
+            CASE 
+                WHEN c.expires_at IS NOT NULL AND c.expires_at < NOW() THEN 3
+                WHEN (
+                    (a.id IS NOT NULL AND e.pages_viewed >= c.total_pages AND (
+                        SELECT COUNT(*) 
                         FROM assessment_attempts aa 
                         WHERE aa.assessment_id = a.id 
-                        AND aa.user_id = ? 
+                        AND aa.user_id = :user_id6 
                         AND aa.status = 'completed'
                         AND aa.score >= a.passing_score
-                    ) THEN 1
-                    ELSE 0
-                END
-            ELSE 0
-        END AS assessment_passed,
-        -- Determine REAL completion status based on our logic
-        CASE 
-            WHEN e.status = 'ongoing' AND c.expires_at IS NOT NULL AND c.expires_at < NOW() THEN 'expired'
-            ELSE
-                CASE 
-                    -- Has assessment: need both PDF complete AND at least one passing assessment score
-                    WHEN a.id IS NOT NULL THEN
-                        CASE 
-                            WHEN e.pages_viewed >= c.total_pages AND (
-                                SELECT COUNT(*) 
-                                FROM assessment_attempts aa 
-                                WHERE aa.assessment_id = a.id 
-                                AND aa.user_id = ? 
-                                AND aa.status = 'completed'
-                                AND aa.score >= a.passing_score
-                            ) > 0 THEN 'completed'
-                            ELSE 'ongoing'
-                        END
-                    -- No assessment: just need PDF complete
-                    ELSE
-                        CASE 
-                            WHEN e.pages_viewed >= c.total_pages THEN 'completed'
-                            ELSE 'ongoing'
-                        END
-                END
-        END AS display_status
-    FROM courses c
-    JOIN enrollments e ON e.course_id = c.id AND e.user_id = ?
-    LEFT JOIN assessments a ON a.course_id = c.id
-    WHERE e.user_id = ?
-    GROUP BY c.id
-    ORDER BY 
-        CASE 
-            WHEN c.expires_at IS NOT NULL AND c.expires_at < NOW() THEN 3
-            WHEN (
-                (a.id IS NOT NULL AND e.pages_viewed >= c.total_pages AND (
-                    SELECT COUNT(*) 
-                    FROM assessment_attempts aa 
-                    WHERE aa.assessment_id = a.id 
-                    AND aa.user_id = ? 
-                    AND aa.status = 'completed'
-                    AND aa.score >= a.passing_score
-                ) > 0) OR
-                (a.id IS NULL AND e.pages_viewed >= c.total_pages)
-            ) THEN 2
-            ELSE 1
-        END,
-        c.id DESC
-");
-
-// Execute with all 5 user ID parameters
-$stmt->execute([$userId, $userId, $userId, $userId, $userId, $userId]);
+                    ) > 0) OR
+                    (a.id IS NULL AND e.pages_viewed >= c.total_pages)
+                ) THEN 2
+                ELSE 1
+            END,
+            c.id DESC
+        LIMIT :limit OFFSET :offset
+    ");
+    
+    // Bind all parameters
+    $stmt->bindValue(':user_id1', $userId, PDO::PARAM_INT);
+    $stmt->bindValue(':user_id2', $userId, PDO::PARAM_INT);
+    $stmt->bindValue(':user_id3', $userId, PDO::PARAM_INT);
+    $stmt->bindValue(':user_id4', $userId, PDO::PARAM_INT);
+    $stmt->bindValue(':user_id5', $userId, PDO::PARAM_INT);
+    $stmt->bindValue(':user_id6', $userId, PDO::PARAM_INT);
+    $stmt->bindValue(':search', "%$search%", PDO::PARAM_STR);
+    $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+    $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+    $stmt->execute();
+} else {
+    $stmt = $pdo->prepare("
+        SELECT 
+            c.id, 
+            c.title, 
+            c.description, 
+            c.thumbnail, 
+            c.created_at, 
+            c.expires_at,
+            c.total_pages,
+            e.progress, 
+            e.pages_viewed,
+            u.fname as proponent_fname,
+            u.lname as proponent_lname,
+            CONCAT(u.fname, ' ', u.lname) as proponent_fullname,
+            -- Check if course has assessment
+            CASE 
+                WHEN a.id IS NOT NULL THEN 1 
+                ELSE 0 
+            END AS has_assessment,
+            a.id as assessment_id,
+            a.passing_score,
+            -- Get the latest assessment attempt score for this user
+            (
+                SELECT aa.score 
+                FROM assessment_attempts aa 
+                WHERE aa.assessment_id = a.id 
+                AND aa.user_id = :user_id1 
+                AND aa.status = 'completed'
+                ORDER BY aa.completed_at DESC 
+                LIMIT 1
+            ) as latest_assessment_score,
+            -- Check if student passed assessment (compare score with passing_score)
+            CASE 
+                WHEN a.id IS NOT NULL THEN
+                    CASE 
+                        WHEN EXISTS (
+                            SELECT 1 
+                            FROM assessment_attempts aa 
+                            WHERE aa.assessment_id = a.id 
+                            AND aa.user_id = :user_id2 
+                            AND aa.status = 'completed'
+                            AND aa.score >= a.passing_score
+                        ) THEN 1
+                        ELSE 0
+                    END
+                ELSE 0
+            END AS assessment_passed,
+            -- Determine REAL completion status based on our logic
+            CASE 
+                WHEN e.status = 'ongoing' AND c.expires_at IS NOT NULL AND c.expires_at < NOW() THEN 'expired'
+                ELSE
+                    CASE 
+                        -- Has assessment: need both PDF complete AND at least one passing assessment score
+                        WHEN a.id IS NOT NULL THEN
+                            CASE 
+                                WHEN e.pages_viewed >= c.total_pages AND (
+                                    SELECT COUNT(*) 
+                                    FROM assessment_attempts aa 
+                                    WHERE aa.assessment_id = a.id 
+                                    AND aa.user_id = :user_id3 
+                                    AND aa.status = 'completed'
+                                    AND aa.score >= a.passing_score
+                                ) > 0 THEN 'completed'
+                                ELSE 'ongoing'
+                            END
+                        -- No assessment: just need PDF complete
+                        ELSE
+                            CASE 
+                                WHEN e.pages_viewed >= c.total_pages THEN 'completed'
+                                ELSE 'ongoing'
+                            END
+                    END
+            END AS display_status
+        FROM courses c
+        JOIN enrollments e ON e.course_id = c.id AND e.user_id = :user_id4
+        LEFT JOIN users u ON c.proponent_id = u.id
+        LEFT JOIN assessments a ON a.course_id = c.id
+        WHERE e.user_id = :user_id5
+        AND e.is_archived = 0
+        GROUP BY c.id
+        ORDER BY 
+            CASE 
+                WHEN c.expires_at IS NOT NULL AND c.expires_at < NOW() THEN 3
+                WHEN (
+                    (a.id IS NOT NULL AND e.pages_viewed >= c.total_pages AND (
+                        SELECT COUNT(*) 
+                        FROM assessment_attempts aa 
+                        WHERE aa.assessment_id = a.id 
+                        AND aa.user_id = :user_id6 
+                        AND aa.status = 'completed'
+                        AND aa.score >= a.passing_score
+                    ) > 0) OR
+                    (a.id IS NULL AND e.pages_viewed >= c.total_pages)
+                ) THEN 2
+                ELSE 1
+            END,
+            c.id DESC
+        LIMIT :limit OFFSET :offset
+    ");
+    
+    // Bind all parameters
+    $stmt->bindValue(':user_id1', $userId, PDO::PARAM_INT);
+    $stmt->bindValue(':user_id2', $userId, PDO::PARAM_INT);
+    $stmt->bindValue(':user_id3', $userId, PDO::PARAM_INT);
+    $stmt->bindValue(':user_id4', $userId, PDO::PARAM_INT);
+    $stmt->bindValue(':user_id5', $userId, PDO::PARAM_INT);
+    $stmt->bindValue(':user_id6', $userId, PDO::PARAM_INT);
+    $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+    $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+    $stmt->execute();
+}
 $myCourses = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// For debugging - uncomment to see what values are being returned
-/*
-echo "<pre>";
-foreach ($myCourses as $c) {
-    echo "Course: " . $c['title'] . "\n";
-    echo "Has Assessment: " . $c['has_assessment'] . "\n";
-    echo "Pages Viewed: " . $c['pages_viewed'] . "/" . $c['total_pages'] . "\n";
-    echo "Latest Score: " . ($c['latest_assessment_score'] ?? 'N/A') . "\n";
-    echo "Passing Score: " . ($c['passing_score'] ?? 'N/A') . "\n";
-    echo "Assessment Passed: " . $c['assessment_passed'] . "\n";
-    echo "Display Status: " . $c['display_status'] . "\n";
-    echo "------------------------\n";
-}
-echo "</pre>";
-*/
+// Calculate total pages
+$totalPages = ceil($totalCount / $limit);
 ?>
 <!doctype html>
 <html lang="en">
@@ -174,6 +322,109 @@ body {
     margin-bottom: 2rem;
     border-left: 8px solid #1d6fb0;
     padding-left: 1.2rem;
+}
+
+/* Controls Bar */
+.controls-bar {
+    margin-bottom: 1.5rem;
+    display: flex;
+    justify-content: right;
+}
+
+.search-container {
+    position: relative;
+    display: flex;
+    width: 100%;
+    max-width: 350px;
+}
+
+.search-input {
+    flex: 1;
+    padding: 0.7rem 1rem;
+    border: 3px solid #1a4b77;
+    background: white;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.9rem;
+    outline: none;
+    transition: all 0.1s ease;
+}
+
+.search-input:focus {
+    border-color: #1d6fb0;
+    box-shadow: 0 0 0 2px rgba(29, 111, 176, 0.2);
+}
+
+.search-icon {
+    background: #1661a3;
+    border: none;
+    border-left: 2px solid #1a4b77;
+    padding: 0.7rem 1.2rem;
+    color: white;
+    cursor: pointer;
+    transition: all 0.1s ease;
+}
+
+.search-icon:hover {
+    background: #1a70b5;
+    transform: translate(-1px, -1px);
+}
+
+.btn-add {
+    background: #6c757d;
+    border: 3px solid #5a6268;
+    box-shadow: 3px 3px 0 #404040;
+    text-decoration: none;
+    padding: 0.6rem 1.2rem;
+    color: white;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 600;
+    transition: all 0.1s ease;
+}
+
+.btn-add:hover {
+    transform: translate(-1px, -1px);
+    box-shadow: 4px 4px 0 #404040;
+    color: white;
+    background: #5a6268;
+}
+
+/* Section Divider */
+.section-divider {
+    border: none;
+    height: 3px;
+    background: #1a4b77;
+    margin: 1rem 0 1.5rem 0;
+    opacity: 0.3;
+}
+
+/* Search Info */
+.search-info {
+    background: #d7e9ff;
+    border-left: 6px solid #1d6fb0;
+    padding: 0.8rem 1.2rem;
+    margin-bottom: 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: #07223b;
+}
+
+.search-info span:first-child i {
+    margin-right: 8px;
+    color: #1d6fb0;
+}
+
+.search-info #resultCount {
+    background: #1a4b77;
+    color: white;
+    padding: 0.2rem 0.8rem;
+    font-weight: 600;
 }
 
 /* Course Grid */
@@ -435,6 +686,90 @@ body {
     cursor: not-allowed;
 }
 
+/* Pagination Styles */
+.pagination-container {
+    margin-top: 2rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.pagination-nav {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.pagination-link {
+    background: #1661a3;
+    border: 2px solid #0c314d;
+    box-shadow: 2px 2px 0 #0b263b;
+    padding: 0.4rem 0.8rem;
+    min-width: 36px;
+    text-align: center;
+    color: white;
+    text-decoration: none;
+    font-weight: 600;
+    transition: all 0.1s ease;
+    display: inline-block;
+}
+
+.pagination-link:hover {
+    transform: translate(-1px, -1px);
+    box-shadow: 3px 3px 0 #0b263b;
+    background: #1a70b5;
+    color: white;
+}
+
+.pagination-link.active {
+    background: #28a745;
+    border-color: #1e7e34;
+    box-shadow: 2px 2px 0 #166b2c;
+}
+
+.pagination-prev, .pagination-next {
+    background: #1661a3;
+    border: 2px solid #0c314d;
+    box-shadow: 2px 2px 0 #0b263b;
+    padding: 0.4rem 1rem;
+    color: white;
+    text-decoration: none;
+    font-weight: 600;
+    transition: all 0.1s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.pagination-prev:hover, .pagination-next:hover {
+    transform: translate(-1px, -1px);
+    box-shadow: 3px 3px 0 #0b263b;
+    background: #1a70b5;
+    color: white;
+}
+
+.pagination-disabled {
+    background: #6c757d;
+    border-color: #5a6268;
+    box-shadow: 2px 2px 0 #404040;
+    padding: 0.4rem 1rem;
+    color: white;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.page-info {
+    color: #1e4465;
+    font-size: 0.9rem;
+}
+
 /* Empty State */
 .empty-state {
     text-align: center;
@@ -515,6 +850,34 @@ body {
     
     <div class="modern-courses-wrapper">
         <h2 class="modern-section-title">My Courses</h2>
+
+        <!-- Controls Bar - Search Bar -->
+        <div class="controls-bar">
+            <form method="GET" action="" style="display: flex; gap: 0.5rem; width: 100%; max-width: 350px;">
+                <div class="search-container" style="width: 100%;">
+                    <input type="text" name="search" class="search-input" placeholder="Search by title or instructor..." value="<?= htmlspecialchars($search) ?>">
+                    <button type="submit" class="search-icon" style="background: #1661a3; border: none; border-left: 2px solid #1a4b77; padding: 0.7rem 1.2rem; color: white; cursor: pointer;">
+                        <i class="fas fa-search"></i>
+                    </button>
+                </div>
+                <?php if (!empty($search)): ?>
+                    <a href="my_courses.php" class="btn-add" style="background: #6c757d; box-shadow: 3px 3px 0 #404040; text-decoration: none; padding: 0.6rem 1.2rem; color: white; display: inline-flex; align-items: center; gap: 6px;">
+                        <i class="fas fa-times"></i> Clear
+                    </a>
+                <?php endif; ?>
+            </form>
+        </div>
+
+        <!-- Divider Line -->
+        <hr class="section-divider">
+
+        <!-- Search Results Info -->
+        <?php if (!empty($search)): ?>
+        <div class="search-info visible">
+            <span><i class="fas fa-search"></i> Search results for: <strong><?= htmlspecialchars($search) ?></strong></span>
+            <span id="resultCount"><?= $totalCount ?> course(s) found</span>
+        </div>
+        <?php endif; ?>
         
         <?php if (!empty($myCourses)): ?>
             <div class="modern-courses-grid">
@@ -584,13 +947,16 @@ body {
                         
                         <div class="modern-course-info">
                             <?php
-                                $startDate = date('M d, Y', strtotime($c['created_at']));
                                 $expiryDate = $c['expires_at']
                                     ? date('M d, Y', strtotime($c['expires_at']))
                                     : 'No expiry';
                             ?>
-                            <p><strong><i class="fas fa-calendar-alt"></i> Start:</strong> <span><?= $startDate ?></span></p>
                             <p><strong><i class="fas fa-hourglass-half"></i> Expires:</strong> <span><?= $expiryDate ?></span></p>
+                            
+                            <!-- Show instructor name -->
+                            <?php if (!empty($c['proponent_fullname'])): ?>
+                            <p><strong><i class="fas fa-chalkboard-teacher"></i> Instructor:</strong> <span><?= htmlspecialchars($c['proponent_fullname']) ?></span></p>
+                            <?php endif; ?>
                         </div>
 
                         <!-- Progress Display -->
@@ -637,12 +1003,60 @@ body {
                 </div>
                 <?php endforeach; ?>
             </div>
+
+            <!-- Pagination Navigation -->
+            <?php if ($totalPages > 1 && !empty($myCourses)): ?>
+            <div class="pagination-container">
+                <div class="pagination-nav">
+                    <!-- Previous Button -->
+                    <?php if ($page > 1): ?>
+                        <a href="?page=<?= $page - 1 ?>&search=<?= urlencode($search) ?>" class="pagination-prev">
+                            <i class="fas fa-chevron-left"></i> Previous
+                        </a>
+                    <?php else: ?>
+                        <span class="pagination-disabled">
+                            <i class="fas fa-chevron-left"></i> Previous
+                        </span>
+                    <?php endif; ?>
+                    
+                    <!-- Page Numbers -->
+                    <?php for ($i = 1; $i <= $totalPages; $i++): ?>
+                        <?php if ($i == $page): ?>
+                            <span class="pagination-link active"><?= $i ?></span>
+                        <?php else: ?>
+                            <a href="?page=<?= $i ?>&search=<?= urlencode($search) ?>" class="pagination-link">
+                                <?= $i ?>
+                            </a>
+                        <?php endif; ?>
+                    <?php endfor; ?>
+                    
+                    <!-- Next Button -->
+                    <?php if ($page < $totalPages): ?>
+                        <a href="?page=<?= $page + 1 ?>&search=<?= urlencode($search) ?>" class="pagination-next">
+                            Next <i class="fas fa-chevron-right"></i>
+                        </a>
+                    <?php else: ?>
+                        <span class="pagination-disabled">
+                            Next <i class="fas fa-chevron-right"></i>
+                        </span>
+                    <?php endif; ?>
+                </div>
+                <div class="page-info">
+                    Showing <?= count($myCourses) ?> of <?= $totalCount ?> courses | Page <?= $page ?> of <?= $totalPages ?>
+                </div>
+            </div>
+            <?php endif; ?>
+
         <?php else: ?>
             <div class="empty-state">
                 <i class="fas fa-book-open"></i>
-                <h4>No Courses Yet</h4>
-                <p>You are not enrolled in any courses yet.</p>
-                <a href="courses.php" class="btn-add">Browse Courses</a>
+                <h4><?= !empty($search) ? 'No Matching Courses' : 'No Courses Yet' ?></h4>
+                <p><?= !empty($search) ? 'No enrolled courses match your search criteria.' : 'You are not enrolled in any courses yet.' ?></p>
+                <?php if (!empty($search)): ?>
+                    <a href="my_courses.php" class="btn-add">Clear Search</a>
+                <?php else: ?>
+                    <a href="courses.php" class="btn-add">Browse Courses</a>
+                <?php endif; ?>
             </div>
         <?php endif; ?>
         

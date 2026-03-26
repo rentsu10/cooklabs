@@ -331,7 +331,7 @@
         /* ---------- FOOTER sharp, minimal ---------- */
         .sharp-footer {
             display: flex;
-            justify-content: space-between;
+            justify-content: right;
             align-items: center;
             padding: 0.8rem 0 0.3rem;
             border-top: 4px solid #245e91;
@@ -398,7 +398,7 @@
                 <!-- optional header logo container (empty but present) -->
                 <!-- <div class="header-logo-container"><img src="../uploads/images/cooklabs-logo.png" alt="CookLabs Logo"></div> -->
                 <div class="logo-name">
-                    CookLabs<span>·LMS</span>
+                    IETI<span>·LMS</span>
                 </div>
                 <i class="fas fa-cube" style="color:#2170b3; font-size: 1.5rem; margin-left: -0.2rem;"></i>
             </div>
@@ -417,11 +417,11 @@
                     <i class="fas fa-cubes"></i> A Learning Platform for Cookery NCII Students of IETI·Marikina 
                 </div>
                 <p>
-                    blah blah blah blah blah blah blah blah blah blah . 
-                    blah blah blah blah blah blah blah blah blah blah blah blah blah blah .
+                    "A modern learning management system crafted for precision and excellence. 
+                    Where students can sharpen skills and build the future."
                 </p>
                 <div class="simple-tagline">
-                    <i class="fas fa-knife"></i> blah blah &nbsp;&nbsp; <i class="fas fa-egg"></i>  blah blah 
+                    <i class="fas fa-knife"></i> Cook up your potential  ·  One course at a time
                 </div>
             </div>
 
@@ -434,10 +434,10 @@
                     </div>
                     <div class="text-content">
                         <div class="title-container">
-                            <i class="fas fa-kitchen-set"></i> Fundamentals
+                            <i class="fas fa-kitchen-set"></i> IETI College of Science and Technology
                         </div>
                         <div class="description-container">
-                            Knife skills, stocks, and safety — foundation modules for NCII.
+                            To produce world-class multi-skilled graduates adaptive to new and emerging technologies.
                         </div>
                     </div>
                 </div>
@@ -448,10 +448,10 @@
                     </div>
                     <div class="text-content">
                         <div class="title-container">
-                            <i class="fas fa-fire"></i> Signature dishes
+                             TESDA · Technical Education and Skills Development Authority
                         </div>
                         <div class="description-container">
-                            Adobo, sinigang, and plating techniques — heritage cooking.
+                             “Sa TESDA, Lingap ay Maaasahan”
                         </div>
                     </div>
                 </div>
@@ -459,12 +459,6 @@
         </div>
 
         <footer class="sharp-footer">
-            <div class="footer-links">
-                <a href="#"><i class="fas fa-circle-info"></i> about</a>
-                <a href="#"><i class="fas fa-phone"></i> contact</a>
-                <a href="#"><i class="fas fa-file"></i> privacy policy</a>
-                <a href="#"><i class="fas fa-circle-check"></i> terms of service</a>
-            </div>
             <div class="sharp-stamp">
                 <i class="fas fa-copyright"></i> 2026 CookLabs LMS · IETI College of Science and Technology·Marikina
             </div>
