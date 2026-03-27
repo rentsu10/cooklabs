@@ -12,8 +12,8 @@ $isProponent = ($userRole === 'proponent');
 
 // Fetch all courses with enrollment info for current user
 $stmt = $pdo->prepare("
-    SELECT c.id, c.title, c.description, c.thumbnail, c.file_pdf, c.file_video,
-           e.status AS enroll_status, e.progress, e.completed_at
+    SELECT c.id, c.title, c.description, c.thumbnail, c.file_pdf,
+           e.status AS enroll_status, e.progress, e.pages_viewed, c.total_pages, e.completed_at
     FROM courses c
     LEFT JOIN enrollments e ON e.course_id = c.id AND e.user_id = ?
     WHERE c.is_active = 1
@@ -170,7 +170,7 @@ function get_author_name($item) {
 <head>
     <meta charset="utf-8">
     <title>CookLabs · Dashboard</title>
-    <link rel="icon" type="image/png" href="../uploads/images/ieti-logo.png">
+    <link rel="icon" type="image/png" href="../uploads/images/cooklabs-mini-logo.png">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Google Fonts: Inter (geometric) -->
@@ -212,7 +212,6 @@ function get_author_name($item) {
                         <h3>
                             <i class="fas fa-newspaper"></i>News & Announcements
                         </h3>
-                        <a href="<?= BASE_URL ?>/admin/news_crud.php">View All</a>
                     </div>
                     
                     <div class="card-content" id="newsContainer">
@@ -271,7 +270,6 @@ function get_author_name($item) {
                             <?php if (!empty($pendingUsers)): ?>
                                 <table class="pending-users-table">
                                     <thead>
-                                        <tr>
                                             <th>Name</th>
                                             <th>Email</th>
                                             <th>Registered</th>
@@ -352,9 +350,6 @@ function get_author_name($item) {
                     <div class="course-card-wrapper">
                         <div class="section-header">
                             <h3><i class="fas fa-chalkboard-teacher"></i> Your Courses</h3>
-                            <a href="<?= BASE_URL ?>/proponent/courses_crud.php" class="view-all-link">
-                                <i class="fas fa-plus"></i> Manage Courses
-                            </a>
                         </div>
                         
                         <div class="card-content">
@@ -447,14 +442,11 @@ function get_author_name($item) {
                         <div class="card-content">
                             <?php if (!empty($ongoingCourses)): ?>
                                 <?php foreach ($ongoingCourses as $c): 
+                                    // Calculate PDF progress based on pages viewed vs total pages
                                     $progressPercent = 0;
-                                    if ($c['progress'] && ($c['file_pdf'] || $c['file_video'])) {
-                                        $totalDuration = 0;
-                                        if ($c['file_pdf']) $totalDuration += 60;
-                                        if ($c['file_video']) $totalDuration += 300;
-                                        if ($totalDuration > 0) {
-                                            $progressPercent = min(100, round(($c['progress'] / $totalDuration) * 100));
-                                        }
+                                    if ($c['total_pages'] > 0 && isset($c['pages_viewed'])) {
+                                        $progressPercent = round(($c['pages_viewed'] / $c['total_pages']) * 100);
+                                        $progressPercent = min(100, $progressPercent);
                                     }
                                 ?>
                                     <a href="<?= BASE_URL ?>/public/course_view.php?id=<?= $c['id'] ?>" class="course-card-link">
