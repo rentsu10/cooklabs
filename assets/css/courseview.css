@@ -1,0 +1,523 @@
+ /* ===== SHARP GEOMETRIC COURSE VIEW ===== */
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+
+            body {
+                font-family: 'Inter', Arial, sans-serif;
+                background: #eaf2fc;
+                min-height: 100vh;
+                display: flex;
+            }
+
+            /* Sidebar */
+            .lms-sidebar-container {
+                position: fixed;
+                left: 0;
+                top: 0;
+                width: 280px;
+                height: 100vh;
+                z-index: 1000;
+            }
+
+            /* Main Content */
+            .course-content-wrapper {
+                margin-left: 280px;
+                flex: 1;
+                padding: 2rem 2.5rem;
+                min-height: 100vh;
+                overflow-y: auto;
+            }
+
+            /* Course Header - Updated with instructor at bottom */
+            .course-header {
+                background: #ffffff;
+                border: 3px solid #1a4b77;
+                box-shadow: 12px 12px 0 #123a5e;
+                border-radius: 0px;
+                padding: 2rem;
+                margin-bottom: 2rem;
+            }
+
+            .course-header h3 {
+                font-size: 2rem;
+                font-weight: 700;
+                color: #07223b;
+                margin-bottom: 1rem;
+                border-left: 8px solid #1d6fb0;
+                padding-left: 1.2rem;
+            }
+
+            .course-header p {
+                color: #1e4465;
+                font-size: 1rem;
+                line-height: 1.6;
+                margin-bottom: 1rem;
+            }
+
+            .instructor-info {
+                border-top: 3px solid #2367a3;
+                padding-top: 1rem;
+                margin-top: 0.5rem;
+                color: #5f6f82;
+                font-size: 0.9rem;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+
+            .instructor-info i {
+                color: #1d6fb0;
+            }
+
+            /* Export Button */
+            .export-btn {
+                background: #1661a3;
+                border: 3px solid #0c314d;
+                box-shadow: 4px 4px 0 #0b263b;
+                padding: 0.6rem 1.5rem;
+                font-weight: 600;
+                color: white;
+                text-decoration: none;
+                border-radius: 0px;
+                transition: all 0.1s ease;
+                display: inline-flex;
+                align-items: center;
+                gap: 8px;
+                font-size: 0.9rem;
+            }
+
+            .export-btn:hover {
+                transform: translate(-2px, -2px);
+                box-shadow: 6px 6px 0 #0b263b;
+                background: #1a70b5;
+                color: white;
+            }
+
+            /* Progress Section */
+            .progress-section {
+                background: #ffffff;
+                border: 3px solid #1a4b77;
+                box-shadow: 12px 12px 0 #123a5e;
+                border-radius: 0px;
+                padding: 1.5rem;
+                margin-bottom: 2rem;
+            }
+
+            .progress-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 1rem;
+                flex-wrap: wrap;
+                gap: 1rem;
+            }
+
+            .progress-header h5 {
+                font-weight: 700;
+                color: #07223b;
+                margin: 0;
+                border-left: 6px solid #1d6fb0;
+                padding-left: 1rem;
+            }
+
+            .progress-header h5 i {
+                color: #1d6fb0;
+                margin-right: 8px;
+            }
+
+            .time-spent {
+                background: #f0f8ff;
+                border: 2px solid #b8d6f5;
+                box-shadow: 3px 3px 0 #a0c0e0;
+                padding: 0.5rem 1rem;
+                border-radius: 0px;
+                font-size: 0.9rem;
+                color: #1e4465;
+            }
+
+            .time-spent i {
+                color: #1d6fb0;
+            }
+
+            /* Progress Bar */
+            .progress-container {
+                background: #f0f8ff;
+                border: 2px solid #b8d6f5;
+                box-shadow: 3px 3px 0 #a0c0e0;
+                padding: 1rem;
+                margin: 1rem 0;
+            }
+
+            .progress-stats {
+                display: flex;
+                justify-content: space-between;
+                margin-bottom: 0.5rem;
+                color: #1e4465;
+            }
+
+            .progress-bar-container {
+                height: 10px;
+                background: #e0e0e0;
+                border: 1px solid #aaa;
+                border-radius: 0px;
+                overflow: hidden;
+            }
+
+            .progress-bar-fill {
+                height: 100%;
+                background: #1d6fb0;
+                transition: width 0.3s ease;
+            }
+
+            /* Status Badges */
+            .badge-ongoing {
+                background: #ffc107;
+                border: 2px solid #b88f1f;
+                box-shadow: 2px 2px 0 #8f6f1a;
+                color: #07223b;
+                padding: 0.4rem 1rem;
+                font-size: 0.8rem;
+                font-weight: 700;
+                border-radius: 50px;
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+            }
+
+            .badge-completed {
+                background: #28a745;
+                border: 2px solid #1e7e34;
+                box-shadow: 2px 2px 0 #166b2c;
+                color: white;
+                padding: 0.4rem 1rem;
+                font-size: 0.8rem;
+                font-weight: 700;
+                border-radius: 50px;
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+            }
+
+            /* Assessment Badge */
+            .badge-assessment-completed {
+                background: #ffc107;
+                border: 2px solid #b88f1f;
+                box-shadow: 2px 2px 0 #8f6f1a;
+                color: #07223b;
+                padding: 0.4rem 1rem;
+                font-size: 0.8rem;
+                font-weight: 700;
+                border-radius: 50px;
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+            }
+
+            /* Complete Button */
+            .btn-complete {
+                background: #28a745;
+                border: 3px solid #1e7e34;
+                box-shadow: 4px 4px 0 #166b2c;
+                padding: 0.7rem 1.8rem;
+                font-weight: 700;
+                color: white;
+                border-radius: 0px;
+                transition: all 0.1s ease;
+                cursor: pointer;
+                display: inline-flex;
+                align-items: center;
+                gap: 8px;
+                border: none;
+            }
+
+            .btn-complete:hover:not(:disabled) {
+                transform: translate(-2px, -2px);
+                box-shadow: 6px 6px 0 #166b2c;
+                background: #34ce57;
+            }
+
+            .btn-complete:disabled {
+                opacity: 0.5;
+                cursor: not-allowed;
+            }
+
+            /* Assessment Button */
+            .btn-assessment-take {
+                background: #1661a3;
+                border: 3px solid #0c314d;
+                box-shadow: 4px 4px 0 #0b263b;
+                padding: 0.7rem 2rem;
+                color: white;
+                text-decoration: none;
+                font-weight: 600;
+                display: inline-flex;
+                align-items: center;
+                gap: 8px;
+                border-radius: 0px;
+                transition: all 0.1s ease;
+            }
+
+            .btn-assessment-take:hover {
+                transform: translate(-2px, -2px);
+                box-shadow: 6px 6px 0 #0b263b;
+                background: #1a70b5;
+                color: white;
+            }
+
+            /* Content Cards */
+            .content-card {
+                background: #ffffff;
+                border: 3px solid #1a4b77;
+                box-shadow: 12px 12px 0 #123a5e;
+                border-radius: 0px;
+                padding: 2rem;
+                margin-bottom: 2rem;
+            }
+
+            .content-card h5 {
+                font-weight: 700;
+                color: #07223b;
+                margin-bottom: 1.5rem;
+                border-left: 6px solid #1d6fb0;
+                padding-left: 1rem;
+            }
+
+            .content-card h5 i {
+                color: #1d6fb0;
+                margin-right: 8px;
+            }
+
+            /* PDF Controls */
+            .pdf-controls {
+                display: flex;
+                justify-content: flex-end;
+                margin-bottom: 1rem;
+            }
+
+            /* Fullscreen Button */
+            .fullscreen-btn {
+                background: #1661a3;
+                border: 2px solid #0c314d;
+                box-shadow: 2px 2px 0 #0b263b;
+                color: white;
+                padding: 0.4rem 1rem;
+                cursor: pointer;
+                transition: all 0.1s ease;
+                border-radius: 0px;
+                font-weight: 600;
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                font-size: 0.9rem;
+            }
+
+            .fullscreen-btn:hover {
+                transform: translate(-1px, -1px);
+                box-shadow: 3px 3px 0 #0b263b;
+                background: #1a70b5;
+            }
+
+            .fullscreen-btn i {
+                font-size: 1rem;
+            }
+
+            /* Fullscreen Mode */
+            .course-content-wrapper.fullscreen-mode {
+                margin-left: 0;
+                padding: 0;
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                z-index: 9999;
+                background: #1a2b3e;
+                overflow: hidden;
+            }
+
+            .fullscreen-mode .lms-sidebar-container {
+                display: none;
+            }
+
+            .fullscreen-mode .course-header,
+            .fullscreen-mode .progress-section,
+            .fullscreen-mode .kitchen-accent,
+            .fullscreen-mode .export-btn,
+            .fullscreen-mode #completeBtn,
+            .fullscreen-mode .students-section,
+            .fullscreen-mode .assessment-container,
+            .fullscreen-mode .mt-3 {
+                display: none;
+            }
+
+            .fullscreen-mode .content-card {
+                margin: 0;
+                padding: 0;
+                border: none;
+                box-shadow: none;
+                background: transparent;
+                height: 100vh;
+                display: flex;
+                flex-direction: column;
+            }
+
+            .fullscreen-mode .content-card h5 {
+                display: none;
+            }
+
+            .fullscreen-mode .pdf-scroll-container {
+                height: 100vh !important;
+                border: none;
+                box-shadow: none;
+                background: #1a2b3e;
+                padding: 1rem;
+            }
+
+            .fullscreen-mode .pdf-page {
+                background: white;
+                max-width: 1000px;
+                margin-left: auto;
+                margin-right: auto;
+            }
+
+            .fullscreen-mode .pdf-controls {
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                z-index: 10000;
+                margin: 0;
+            }
+
+            .fullscreen-mode .fullscreen-btn {
+                background: #b71c1c;
+                border-color: #8a1515;
+                box-shadow: 2px 2px 0 #5a0e0e;
+            }
+
+            .fullscreen-mode .fullscreen-btn:hover {
+                background: #c62828;
+            }
+
+            /* PDF Scroll Container */
+            .pdf-scroll-container {
+                background: #f0f8ff;
+                border: 2px solid #1a4b77;
+                box-shadow: 4px 4px 0 #123a5e;
+                padding: 1rem;
+                height: 600px;
+                overflow-y: auto;
+                position: relative;
+                transition: all 0.3s ease;
+            }
+
+            #pdfPages {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 1rem;
+            }
+
+            .pdf-page {
+                width: 100%;
+                display: flex;
+                justify-content: center;
+                background: white;
+                border: 1px solid #b8d6f5;
+                box-shadow: 2px 2px 0 #a0c0e0;
+                position: relative;
+            }
+
+            .pdf-canvas {
+                max-width: 100%;
+                height: auto;
+                display: block;
+            }
+
+            .viewed-badge {
+                position: absolute;
+                top: 10px;
+                right: 10px;
+                background: #28a745;
+                color: white;
+                padding: 2px 8px;
+                font-size: 12px;
+                border-radius: 0px;
+                border: 2px solid #1e7e34;
+                box-shadow: 2px 2px 0 #166b2c;
+                z-index: 10;
+                display: none;
+            }
+
+            /* Video Player */
+            .video-player {
+                background: #f0f8ff;
+                border: 2px solid #b8d6f5;
+                box-shadow: 4px 4px 0 #a0c0e0;
+                border-radius: 0px;
+                overflow: hidden;
+            }
+
+            .video-player video {
+                width: 100%;
+                display: block;
+            }
+
+            /* Toast Notification */
+            .toast-notification {
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                z-index: 9999;
+                animation: slideIn 0.3s ease;
+            }
+
+            @keyframes slideIn {
+                from {
+                    transform: translateX(100%);
+                    opacity: 0; 
+                }
+                to {
+                    transform: translateX(0);
+                    opacity: 1;
+                }
+            }
+
+            /* Kitchen accent */
+            .kitchen-accent {
+                display: flex;
+                justify-content: center;
+                gap: 1rem;
+                margin-top: 2rem;
+                opacity: 0.4;
+            }
+
+            .kitchen-accent i {
+                color: #1d6fb0;
+                font-size: 0.9rem;
+            }
+
+            /* Assessment Container - hidden by default */
+            .assessment-container {
+                display: none;
+                margin-top: 1rem;
+            }
+
+            .assessment-container.visible {
+                display: block;
+            }
+
+            /* Responsive */
+            @media (max-width: 768px) {
+                .course-content-wrapper {
+                    margin-left: 0;
+                    padding: 1rem;
+                }
+                .lms-sidebar-container {
+                    position: relative;
+                    width: 100%;
+                    height: auto;
+                }
+            }

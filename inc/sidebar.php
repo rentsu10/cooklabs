@@ -161,24 +161,6 @@ function get_role_display_name($role) {
                     </a>
                 </li>
                 <?php endif; ?>
-
-                <!-- CONTACT MESSAGES (admin only) -->
-                <?php if($u && (is_admin() || is_superadmin())): ?>
-                <li class="nav-item">
-                    <a class="nav-link" href="<?= BASE_URL ?>/admin/admin_contacts.php">
-                        <i class="fa fa-envelope"></i> Contact Messages
-                        <?php
-                        // Get unread count
-                        $countStmt = $pdo->prepare("SELECT COUNT(*) FROM contact_messages WHERE is_read = 0");
-                        $countStmt->execute();
-                        $unread = $countStmt->fetchColumn();
-                        if ($unread > 0):
-                        ?>
-                            <span class="badge bg-danger float-end"><?= $unread ?></span>
-                        <?php endif; ?>
-                    </a>
-                </li>
-                <?php endif; ?>
                 
                 <!-- ACCOUNT SECTION (no header) -->
                 <!-- Logout (last item) -->

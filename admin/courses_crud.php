@@ -355,6 +355,7 @@ function canCreateAssessment($course_id, $pdo) {
 <head>
 <meta charset="utf-8">
 <title>Course Management - CookLabs LMS</title>
+<link rel="icon" type="image/png" href="../uploads/images/ieti-logo.png">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 <!-- Google Fonts: Inter -->

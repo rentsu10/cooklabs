@@ -3,11 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CookLabs · LMS · clean sharp</title>
-    <link rel="icon" type="image/png" href="../uploads/images/cooklabs-mini-logo.png">
-    <!-- Font Awesome 6 -->
+    <title>CookLabs · LMS · IETI</title>
+    <link rel="icon" type="image/png" href="../uploads/images/ieti-logo.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <!-- Google Fonts: Inter (geometric friendly) -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
@@ -398,7 +396,7 @@
                 <!-- optional header logo container (empty but present) -->
                 <!-- <div class="header-logo-container"><img src="../uploads/images/cooklabs-logo.png" alt="CookLabs Logo"></div> -->
                 <div class="logo-name">
-                    IETI<span>·LMS</span>
+                    IETI - COLLEGE OF SCIENCE AND TECHNOLOGY · MARIKINA
                 </div>
                 <i class="fas fa-cube" style="color:#2170b3; font-size: 1.5rem; margin-left: -0.2rem;"></i>
             </div>

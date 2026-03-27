@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Mar 20, 2026 at 01:23 AM
+-- Generation Time: Mar 26, 2026 at 11:52 AM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -48,8 +48,7 @@ CREATE TABLE `assessments` (
 
 INSERT INTO `assessments` (`id`, `course_id`, `title`, `description`, `time_limit`, `attempts_allowed`, `passing_score`, `question_count`, `total_points`, `created_by`, `created_at`, `updated_at`) VALUES
 (2, 2, 'Training Regulation Post Test', '', NULL, NULL, 75, 4, 0, 1, '2026-03-12 14:01:52', '2026-03-13 07:42:10'),
-(3, 1, 'aadaaaaaaaaaaaaaaa', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaa', 2, NULL, 75, 1, 0, 1, '2026-03-17 08:19:15', NULL),
-(4, 3, 'asdasda', 'dasdasdasd', NULL, NULL, 75, 1, 0, 3, '2026-03-19 07:16:38', NULL);
+(6, 12, 'Assessment Test', 'Assessment Test', NULL, NULL, 75, 10, 0, 3, '2026-03-26 08:00:57', '2026-03-26 08:02:50');
 
 -- --------------------------------------------------------
 
@@ -75,7 +74,21 @@ INSERT INTO `assessment_answers` (`id`, `attempt_id`, `question_id`, `selected_o
 (41, 12, 8, 'C', 1, 1, '2026-03-19 07:41:16'),
 (42, 12, 5, 'D', 1, 1, '2026-03-19 07:41:19'),
 (43, 12, 6, 'C', 0, 0, '2026-03-19 07:41:21'),
-(44, 12, 7, 'A', 1, 1, '2026-03-19 07:41:23');
+(44, 12, 7, 'A', 1, 1, '2026-03-19 07:41:23'),
+(46, 15, 8, 'C', 1, 1, '2026-03-24 11:20:50'),
+(47, 15, 7, 'A', 1, 1, '2026-03-24 11:20:55'),
+(48, 15, 5, 'D', 1, 1, '2026-03-24 11:20:59'),
+(49, 15, 6, 'D', 1, 1, '2026-03-24 11:21:07'),
+(52, 18, 12, 'A', 1, 1, '2026-03-26 08:04:03'),
+(53, 18, 18, 'A', 1, 1, '2026-03-26 08:04:06'),
+(54, 18, 13, 'A', 0, 0, '2026-03-26 08:04:08'),
+(55, 18, 19, 'A', 1, 1, '2026-03-26 08:04:12'),
+(56, 18, 14, 'A', 0, 0, '2026-03-26 08:04:13'),
+(57, 18, 20, 'A', 1, 1, '2026-03-26 08:04:21'),
+(58, 18, 15, 'A', 1, 1, '2026-03-26 08:04:23'),
+(59, 18, 21, 'A', 1, 1, '2026-03-26 08:04:25'),
+(60, 18, 16, 'A', 1, 1, '2026-03-26 08:04:27'),
+(61, 18, 17, 'D', 1, 1, '2026-03-26 08:04:29');
 
 -- --------------------------------------------------------
 
@@ -103,7 +116,9 @@ CREATE TABLE `assessment_attempts` (
 
 INSERT INTO `assessment_attempts` (`id`, `assessment_id`, `user_id`, `attempt_number`, `score`, `total_points`, `earned_points`, `status`, `started_at`, `completed_at`, `time_spent`) VALUES
 (12, 2, 27, 1, 75.00, 0, 3, 'completed', '2026-03-19 07:41:08', '2026-03-19 07:41:25', 0),
-(13, 2, 27, 1, 0.00, 0, NULL, 'completed', '2026-03-19 07:42:15', '2026-03-19 07:42:55', 0);
+(13, 2, 27, 1, 0.00, 0, NULL, 'completed', '2026-03-19 07:42:15', '2026-03-19 07:42:55', 0),
+(15, 2, 27, 1, 100.00, 0, 4, 'completed', '2026-03-24 11:20:45', '2026-03-24 11:21:11', 0),
+(18, 6, 27, 1, 80.00, 0, 8, 'completed', '2026-03-26 08:04:01', '2026-03-26 08:04:33', 0);
 
 -- --------------------------------------------------------
 
@@ -134,8 +149,16 @@ INSERT INTO `assessment_questions` (`id`, `assessment_id`, `question_text`, `opt
 (6, 2, 'Who is Mika', 'Akim', 'Azalea', 'Mikasaurusussy', 'All of the Above', 'D', 1, 2, '2026-03-13 07:42:10'),
 (7, 2, 'Who is Marga', 'Dauzu', 'Margie', 'Blush on', 'Pushable', 'A', 1, 3, '2026-03-13 07:42:10'),
 (8, 2, 'Who is Kooky', 'Scammer', 'Kookycoin', 'Momi Oni Top Fan 1000%', 'Kokey', 'C', 1, 4, '2026-03-13 07:42:10'),
-(9, 3, 'adasdasd', 'asdwasdwasd', 'wasdwasdw', 'asdwasdwasdasdw', 'wasdwasdwdd', 'A', 1, 1, '2026-03-17 08:19:15'),
-(10, 4, 'asdasd', 'ssssssss', 'dddddddddd', 'aaaaaaaaaa', 'ddddddddddd', 'A', 1, 1, '2026-03-19 07:16:38');
+(12, 6, 'Assessment Test', 'Assessment Test', 'Assessment TestAssessment Test', 'Assessment TestAssessment TestAssessment Test', 'Assessment TestAssessment TestAssessment TestAssessment Test', 'A', 1, 1, '2026-03-26 08:02:50'),
+(13, 6, 'Assessment TestAssessment Test', 'Assessment TestAssessment Test', 'Assessment Test', 'Assessment TestAssessment TestAssessment Test', 'Assessment TestAssessment TestAssessment TestAssessment Test', 'B', 1, 2, '2026-03-26 08:02:50'),
+(14, 6, 'Assessment Test', 'Assessment TestAssessment Test', 'Assessment Test', 'Assessment TestAssessment TestAssessment Test', 'Assessment TestAssessment TestAssessment TestAssessment Test', 'B', 1, 3, '2026-03-26 08:02:50'),
+(15, 6, 'Assessment TestAssessment TestAssessment Test', 'Assessment TestAssessment TestAssessment Test', 'Assessment TestAssessment TestAssessment TestAssessment Test', 'Assessment TestAssessment TestAssessment TestAssessment TestAssessment Test', 'Assessment Test', 'A', 1, 4, '2026-03-26 08:02:50'),
+(16, 6, 'Assessment TestAssessment TestAssessment Test', 'Assessment TestAssessment TestAssessment Test', 'Assessment Test', 'Assessment TestAssessment Test', 'Assessment TestAssessment TestAssessment TestAssessment Test', 'A', 1, 5, '2026-03-26 08:02:50'),
+(17, 6, 'Assessment TestAssessment TestAssessment TestAssessment TestAssessment Test', 'Assessment Test', 'Assessment TestAssessment Test', 'Assessment TestAssessment TestAssessment Test', 'Assessment TestAssessment TestAssessment TestAssessment Test', 'D', 1, 6, '2026-03-26 08:02:50'),
+(18, 6, 'Assessment Test', 'Assessment Test', 'Assessment TestAssessment Test', 'Assessment TestAssessment TestAssessment Test', 'Assessment TestAssessment TestAssessment TestAssessment Test', 'A', 1, 7, '2026-03-26 08:02:50'),
+(19, 6, 'Assessment TestAssessment TestAssessment TestAssessment TestAssessment Test', 'Assessment TestAssessment TestAssessment TestAssessment TestAssessment Test', 'Assessment TestAssessment Test', 'Assessment Test', 'Assessment TestAssessment TestAssessment Test', 'A', 1, 8, '2026-03-26 08:02:50'),
+(20, 6, 'Assessment TestAssessment Test', 'Assessment TestAssessment Test', 'Assessment TestAssessment TestAssessment Test', 'Assessment TestAssessment TestAssessment TestAssessment Test', 'Assessment TestAssessment TestAssessment TestAssessment TestAssessment Test', 'A', 1, 9, '2026-03-26 08:02:50'),
+(21, 6, 'Assessment Test', 'Assessment Test', 'Assessment TestAssessment Test', 'Assessment TestAssessment TestAssessment Test', 'Assessment TestAssessment TestAssessment TestAssessment Test', 'A', 1, 10, '2026-03-26 08:02:50');
 
 -- --------------------------------------------------------
 
@@ -185,9 +208,16 @@ CREATE TABLE `courses` (
 --
 
 INSERT INTO `courses` (`id`, `title`, `description`, `thumbnail`, `proponent_id`, `file_pdf`, `total_pages`, `file_video`, `created_at`, `updated_at`, `expires_at`, `is_active`, `summary`, `edited_at`) VALUES
-(1, 'course 1', 'course 1course 1', '3f4f85413b5ff3e8.jpg', 1, NULL, 0, NULL, '2026-03-03 13:34:48', '2026-03-18 06:05:05', NULL, 1, 'course 1course 1course 1course 1course 1course 1course 1course 1course 1course 1course 1course 1', NULL),
 (2, 'Training Regulations', 'Training RegulationsTraining Regulations', 'b3d2a09b4be0d731.png', 1, '029ef61120c5415b.pdf', 95, NULL, '2026-03-10 16:27:40', NULL, NULL, 1, 'Training RegulationsTraining RegulationsTraining Regulations', NULL),
-(3, 'test expired', 'This is an expired course', NULL, 4, NULL, 0, NULL, '2026-03-18 05:57:40', NULL, '2026-03-15', 1, 'No Summary - Expired', NULL);
+(5, 'Fundamentals of Professional Cookery - Unit 1', 'UNIT 1: Introduction to Professional Cookery', 'a7dfc334074ef119.jpg', 3, NULL, 0, NULL, '2026-03-26 03:22:53', '2026-03-26 03:24:19', NULL, 1, 'At the end of this unit, you should be able to:\r\n\r\nIdentify the organizational structure inside the kitchen;\r\nDistinguish the importance of the roles of the kitchen staff;\r\nEnumerate several duties and responsibilities of the kitchen staff;\r\nIdentify professional work habits observed in the kitchen.', NULL),
+(6, 'Fundamentals of Professional Cookery - Unit 2', 'UNIT 2: Basics of Professional Cookery', '86ed0cdaa591c7ab.jpg', 3, NULL, 0, NULL, '2026-03-26 03:23:59', NULL, NULL, 1, 'At the end of this unit, you should be able to:\r\n\r\nIdentify common kitchen tools, utensils, and equipment in the kitchen;\r\nConvert kitchen measurements;\r\nPractice food and occupational safety procedures;\r\nDemonstrate basic knife skills; and\r\nDefine basic and foreign culinary terms commonly used in the kitchen.', NULL),
+(8, 'Preparing Appetizers and Hors d\'oeuvres - Unit 1', 'UNIT 1: Introduction to Appetizers and Hors d\'oeuvres', '0b1337dc94b86689.jpg', 3, NULL, 0, NULL, '2026-03-26 03:39:49', NULL, NULL, 1, 'At the end of this module, you should be able to:\r\n\r\nIdentify the different types of appetizers and hors d’oeuvres;\r\nDetermine the quality of ingredients for preparing appetizers and hors d’oeuvres;\r\nHandle appetizer and hors d’oeuvres ingredients safely; and\r\nPerform personal safety procedures in the kitchen.', NULL),
+(9, 'Preparing Appetizers and Hors d\'oeuvres - Unit 2', 'UNIT 2: Preparing and Plating Appetizers and Hors d\'oeuvres', '22e13a18eece0cc0.jpg', 3, NULL, 0, NULL, '2026-03-26 03:40:35', NULL, NULL, 1, 'At the end of this module, you should be able to:\r\n\r\nPrepare common types of appetizers properly;\r\nPlate and serve common appetizer dishes according to standards; and\r\nIdentify the current trend in plating appetizer dishes.', NULL),
+(10, 'Preparing Meat Dishes - Unit 1', 'Collapse UNIT 1: Introduction to Meat', '19c3d13f9781bb3e.jpg', 3, '49ffb278f41ad4d5.pdf', 17, NULL, '2026-03-26 03:45:58', '2026-03-26 05:33:09', NULL, 1, 'At the end of this unit, you should be able to:\r\n\r\nIdentify the composition and structure of meat;\r\nDetermine the desirable qualities of meat; and\r\nIdentify the quality grade of different types of meat.', NULL),
+(11, 'Preparing Meat Dishes - Unit 2', 'UNIT 2: Meat Fabrication', '6aa8a0fc5bb88a50.jpg', 3, NULL, 0, NULL, '2026-03-26 03:49:29', NULL, NULL, 1, '\r\nPlay Video\r\nAt the end of this unit, you should be able to:\r\n\r\nPerform proper procedures for handling meat;\r\nDetermine the primal and sub-primal cuts of meat; and\r\nDemonstrate the basic techniques for preparing meat.', NULL),
+(12, 'Preparing Egg, Vegetable and Farinaceous Dishes - Unit 1', 'UNIT 1: Preparing Egg Dishes', 'f88ee2a12fec106a.jpg', 3, 'f2cfd05192034b5d.pdf', 17, NULL, '2026-03-26 03:51:42', '2026-03-26 08:03:33', NULL, 1, 'At the end of this unit, you should be able to:\r\n\r\nIdentify the components of an egg;\r\nDetermine the desirable qualities of eggs;\r\nHandle and store fresh eggs properly; and\r\nPrepare eggs using various cooking methods.', NULL),
+(13, 'Preparing Egg, Vegetable and Farinaceous Dishes - Unit 2', 'UNIT 2: Preparing Vegetable Dishes', '283658fadbe73d61.jpg', 3, NULL, 0, NULL, '2026-03-26 03:53:57', '2026-03-26 08:24:43', '2026-03-25', 1, 'At the end of this unit, you should be able to:\r\n\r\nDetermine the types and characteristics of vegetables;\r\nIdentify the qualities of vegetables;\r\nPrepare vegetable dishes; and\r\nPerform procedures for controlling changes in the quality of vegetables.', NULL),
+(14, 'Preparing Egg, Vegetable and Farinaceous Dishes - Unit 3', 'UNIT 3: Preparing Farinaceous Dishes', 'd6c5e12fd59be40f.jpg', 3, NULL, 0, NULL, '2026-03-26 03:55:40', NULL, NULL, 1, 'At the end of this unit, you should be able to:\r\n\r\nIdentify the different farinaceous products;\r\nHandle and store farinaceous products safely; and\r\nPrepare the following farinaceous products using various cooking techniques.', NULL);
 
 -- --------------------------------------------------------
 
@@ -235,14 +265,11 @@ CREATE TABLE `enrollments` (
 --
 
 INSERT INTO `enrollments` (`id`, `user_id`, `course_id`, `enrolled_at`, `completed_at`, `expired_at`, `progress`, `pages_viewed`, `last_viewed_page`, `last_activity`, `status`, `is_archived`) VALUES
-(45, 20, 1, '2026-03-18 14:17:41', NULL, NULL, 0.00, 0, 0, NULL, 'ongoing', 0),
-(46, 24, 1, '2026-03-18 14:17:42', NULL, NULL, 0.00, 0, 0, NULL, 'ongoing', 0),
-(47, 26, 1, '2026-03-18 14:18:06', NULL, NULL, 0.00, 0, 0, NULL, 'ongoing', 0),
-(52, 26, 3, '2026-03-18 15:05:20', NULL, NULL, 0.00, 0, 0, NULL, 'ongoing', 0),
-(53, 16, 3, '2026-03-18 15:05:20', NULL, NULL, 0.00, 0, 0, NULL, 'ongoing', 0),
-(54, 20, 3, '2026-03-18 15:05:20', NULL, NULL, 0.00, 0, 0, NULL, 'ongoing', 0),
-(55, 27, 2, '2026-03-19 07:39:55', '2026-03-19 07:40:15', NULL, 100.00, 95, 0, NULL, 'completed', 0),
-(56, 16, 1, '2026-03-19 08:59:41', NULL, NULL, 0.00, 0, 0, NULL, 'ongoing', 0);
+(55, 27, 2, '2026-03-19 07:39:55', '2026-03-19 07:40:15', NULL, 100.00, 95, 0, NULL, 'completed', 1),
+(59, 27, 14, '2026-03-26 05:21:56', NULL, NULL, 0.00, 0, 0, NULL, 'ongoing', 0),
+(60, 27, 10, '2026-03-26 05:38:31', NULL, NULL, 29.00, 5, 0, NULL, 'ongoing', 0),
+(61, 27, 13, '2026-03-26 07:07:00', NULL, NULL, 0.00, 0, 0, NULL, 'ongoing', 0),
+(62, 27, 12, '2026-03-26 07:07:09', '2026-03-26 08:03:58', NULL, 100.00, 17, 0, NULL, 'completed', 1);
 
 -- --------------------------------------------------------
 
@@ -271,9 +298,7 @@ INSERT INTO `news` (`id`, `title`, `body`, `created_by`, `created_at`, `is_publi
 (5, 'Iran and Gaza conflicts teach Gulf states a hard-power lesson', 'The military campaign that the United States and Israel launched against Iran on 28 February has plunged the region into conflict, triggering retaliatory strikes from Tehran, including against all six states of the Gulf Cooperation Council. Amid frantic efforts to defend their airspaces and populations, these countries are counting the high cost of partnering with the US – a price they were already paying by accepting a compromised role in Donald Trump’s Gaza peace plan. As a result, they are likely to increasingly embrace hard power and diversify security partnerships in the face of worsening regional volatility. \r\n\r\nThe GCC’s worst fears have been realised in the wake of the US–Israel attacks on Iran.\r\n\r\nIn October last year, US President Donald Trump presented his Gaza peace plan as a historic breakthrough. ‘It’s the start of a grand concord and lasting harmony for Israel and all the nations of what will soon be a truly magnificent region,’ he told the Israeli parliament. ‘This is the historic dawn of a new Middle East.’ Instead, it heightened the unease of Saudi Arabia, the United Arab Emirates and other states in the Gulf Cooperation Council (GCC). While the US continues to promote the initiative as a ceasefire blueprint and pathway to reconstruction, reality tells a different story.\r\n\r\nContinuing Israeli air strikes and operations in Gaza and escalating settler violence in the West Bank not only strain the ceasefire but reveal the plan’s underlying weakness. Fundamentally it is an imposed solution that excludes the Palestinians, lacks detailed enforcement mechanisms and fails to address the conflict’s core issues. ‘If we are just resolving what happened in Gaza, the catastrophe [of] the past two years, it’s not enough,’ said Qatari Prime Minister Sheikh Mohammed bin Abdulrahman Al Thani in Doha in December 2025. ‘This conflict is not only about Gaza. It’s about the West Bank. It’s about the rights of the Palestinians for their state.’ \r\n\r\nAfter all, even if the plan were successful, Gaza cannot be isolated from other conflicts in the region. Indeed, Israel’s creeping annexation of the West Bank will give non-state actors in the region yet another reason to target Israel, its allies and vital shipping lanes – already under fire from Iran. Thanks to their dependencies on the US, the GCC states – Saudi Arabia, United Arab Emirates, Qatar, Oman, Bahrain and Kuwait – now find they have little choice but to support Washington’s policies in the region. Yet the consequences, painfully evident in Tehran’s strikes, will compel them to take up hard power in pursuit of security. ', 3, '2026-03-17 01:43:16', 1),
 (6, 'COOKERY NC II FINAL EXAMINATION', 'FINAL EXAMIATION WILL BE CONDUCTED ON\r\n\r\nAPRIL 6 - 10, 2026\r\n\r\nPLEASE SETTLE YOUR ACCOUNT BALANCE AT THE REGISTRARS OFFICE\r\n\r\n', 3, '2026-03-17 01:45:00', 1),
 (7, 'COOKERY PROJECT DEADLINE', '\r\nPLEASE PASS YOUR PROJECTS BEFORE \r\n\r\nAPRIL 9, 2026 \r\n\r\nNON COMPLIANCE WILL HAVE A FAIL GRADE\r\nNO EXEMPTIONS', 4, '2026-03-17 23:45:10', 1),
-(8, 'Test News', 'No news for today', 1, '2026-03-18 00:50:50', 1),
-(9, 'News Filler 1', 'News Filler 1 for testing', 1, '2026-03-18 00:51:03', 1),
-(10, 'News Filler 2', 'News Fillersxczxcascazxcas', 1, '2026-03-18 00:51:16', 1);
+(8, 'Test News', 'No news for today', 1, '2026-03-18 00:50:50', 1);
 
 -- --------------------------------------------------------
 
@@ -293,13 +318,14 @@ CREATE TABLE `news_read` (
 --
 
 INSERT INTO `news_read` (`id`, `user_id`, `news_id`, `read_at`) VALUES
-(11, 1, 10, '2026-03-18 09:07:00'),
-(12, 1, 9, '2026-03-18 09:07:03'),
 (13, 1, 8, '2026-03-18 09:07:05'),
 (14, 1, 7, '2026-03-18 12:44:12'),
 (15, 1, 5, '2026-03-18 12:44:19'),
 (16, 1, 6, '2026-03-19 00:19:33'),
-(17, 1, 4, '2026-03-19 06:29:22');
+(17, 1, 4, '2026-03-19 06:29:22'),
+(18, 1, 3, '2026-03-21 02:34:57'),
+(19, 27, 8, '2026-03-25 10:21:53'),
+(20, 3, 8, '2026-03-26 09:52:16');
 
 -- --------------------------------------------------------
 
@@ -429,7 +455,29 @@ INSERT INTO `pdf_progress` (`id`, `enrollment_id`, `page_number`, `viewed_at`) V
 (666, 55, 92, '2026-03-19 07:40:12'),
 (667, 55, 93, '2026-03-19 07:40:12'),
 (668, 55, 94, '2026-03-19 07:40:12'),
-(669, 55, 95, '2026-03-19 07:40:12');
+(669, 55, 95, '2026-03-19 07:40:12'),
+(732, 60, 1, '2026-03-26 05:38:31'),
+(733, 60, 2, '2026-03-26 05:38:39'),
+(734, 60, 3, '2026-03-26 05:38:40'),
+(735, 60, 4, '2026-03-26 05:38:41'),
+(736, 60, 5, '2026-03-26 05:38:52'),
+(737, 62, 1, '2026-03-26 08:03:43'),
+(738, 62, 2, '2026-03-26 08:03:45'),
+(739, 62, 3, '2026-03-26 08:03:46'),
+(740, 62, 4, '2026-03-26 08:03:47'),
+(741, 62, 5, '2026-03-26 08:03:47'),
+(742, 62, 6, '2026-03-26 08:03:48'),
+(743, 62, 7, '2026-03-26 08:03:49'),
+(744, 62, 8, '2026-03-26 08:03:49'),
+(745, 62, 9, '2026-03-26 08:03:50'),
+(746, 62, 10, '2026-03-26 08:03:51'),
+(747, 62, 11, '2026-03-26 08:03:51'),
+(748, 62, 12, '2026-03-26 08:03:52'),
+(749, 62, 13, '2026-03-26 08:03:52'),
+(750, 62, 14, '2026-03-26 08:03:53'),
+(751, 62, 15, '2026-03-26 08:03:54'),
+(752, 62, 16, '2026-03-26 08:03:54'),
+(753, 62, 17, '2026-03-26 08:03:55');
 
 -- --------------------------------------------------------
 
@@ -477,14 +525,21 @@ CREATE TABLE `users` (
 --
 
 INSERT INTO `users` (`id`, `username`, `password`, `fname`, `lname`, `email`, `role`, `created_at`, `updated_at`, `is_verified`, `otp_code`, `otp_expires_at`, `status`, `message_notifications`, `email_notifications`, `departments`) VALUES
-(1, 'renz', '$2y$10$s/.EtPCh3JvNPVtKtafDDOAEXQC/ulCI8EXXxRtsM05X0tH.e/7M.', 'renz', 'renz', 'renz@gmail.com', 'superadmin', '2026-03-03 01:10:36', NULL, 0, NULL, NULL, 'confirmed', 1, 1, NULL),
-(3, 'admin', '$2y$10$af/ikZHii0fV18bHP5uFeu1Ts/MqKnZujyLeXjk7u.LGETD49ANA.', 'admin', 'admin', 'admin@gmail.com', 'admin', '2026-03-03 01:24:24', NULL, 0, NULL, NULL, 'confirmed', 1, 1, NULL),
-(4, 'pro', '$2y$10$JxbaFCY4HB8bwFdSL4IWgOSJhYAeEhiBvmDBMd4MsjUFrJE8LgYje', 'pro', 'pro', 'pro@gmail.com', 'proponent', '2026-03-03 01:26:06', NULL, 0, NULL, NULL, 'confirmed', 1, 1, NULL),
+(1, 'renz', '$2y$10$s/.EtPCh3JvNPVtKtafDDOAEXQC/ulCI8EXXxRtsM05X0tH.e/7M.', 'SuperAdmin', 'User', 'renz@gmail.com', 'superadmin', '2026-03-03 01:10:36', NULL, 0, NULL, NULL, 'confirmed', 1, 1, NULL),
+(3, 'admin', '$2y$10$af/ikZHii0fV18bHP5uFeu1Ts/MqKnZujyLeXjk7u.LGETD49ANA.', 'Admin', 'User', 'admin@gmail.com', 'admin', '2026-03-03 01:24:24', NULL, 0, NULL, NULL, 'confirmed', 1, 1, NULL),
+(4, 'pro', '$2y$10$JxbaFCY4HB8bwFdSL4IWgOSJhYAeEhiBvmDBMd4MsjUFrJE8LgYje', 'Instructor', 'User', 'pro@gmail.com', 'proponent', '2026-03-03 01:26:06', NULL, 0, NULL, NULL, 'confirmed', 1, 1, NULL),
 (16, 'kookysaurus', '$2y$10$zxmdYFEuqkUv98.xjIAGT.I61n37VUFQjOAYa3Hso/QaFC6zJ9S2C', 'Kooky Lyann', 'Arabia', 'kookyarabia06@gmail.com', 'user', '2026-03-17 08:26:19', NULL, 0, NULL, NULL, 'confirmed', 1, 1, NULL),
 (20, 'marga', '$2y$10$Rlx1T3J.GG6GIKeIgXgNEepNnLwD8oiWgL0W7a1UzAukJzejwW.Ca', 'Margarette', 'Duazo', 'duazomargarette@gmail.com', 'user', '2026-03-18 08:20:04', NULL, 0, NULL, NULL, 'confirmed', 1, 1, NULL),
 (24, 'rentsu', '$2y$10$zSFVUNXUOUpX9QCOtgHad.5yPi3bl6gUv/d0Q7Vxie6K7vyQ7Ic2q', 'Renz', 'Mendiola', 'ramendiola418@gmail.com', 'user', '2026-03-18 08:55:22', NULL, 0, NULL, NULL, 'confirmed', 1, 1, NULL),
-(26, 'test', '$2y$10$nmHSI9RBIDEIT9ux2bGt5eqpCqnAcXH8TdExz.SpCK.fxaZsyYuTK', 'G', 'Plankton', 'gplankton1@gmail.com', 'user', '2026-03-18 13:16:24', NULL, 0, NULL, NULL, 'pending', 1, 1, NULL),
-(27, 'user', '$2y$10$BR0e7a/wDJpphj9rqvc2LO5tPF9RAmpGE0N07MyCPDbYYFfcz2aXy', 'user', 'user', 'user@test.com', 'user', '2026-03-19 07:35:07', NULL, 0, NULL, NULL, 'confirmed', 1, 1, NULL);
+(27, 'user', '$2y$10$BR0e7a/wDJpphj9rqvc2LO5tPF9RAmpGE0N07MyCPDbYYFfcz2aXy', 'user', 'user', 'user@test.com', 'user', '2026-03-19 07:35:07', NULL, 0, NULL, NULL, 'confirmed', 1, 1, NULL),
+(28, 'Testpending', '$2y$10$VU8L2opaJ8Qvf/ViIj/yI.R8zrM4RGmNf.7DxiCJEyRwTqaYKEbxy', 'G', 'Plankton', 'gplankton1@gmail.com', 'user', '2026-03-20 02:36:03', NULL, 0, NULL, NULL, 'pending', 1, 1, NULL),
+(29, 'mika', '$2y$10$4hFqLzwI5kPMBwjwNnKOhOQMQTW6e8nNRuQGThJsUaAh6vPFQJmXa', 'Mikaella Rosalia', 'Torre', 'mikaellayap23@gmail.com', 'user', '2026-03-26 08:57:43', NULL, 0, NULL, NULL, 'confirmed', 1, 1, NULL),
+(30, 'test1', '$2y$10$/QM2ZqaJAmjQV7I43bZ49OqM1g/E2b27GYqH.3Mo3uE4eUN415Ohe', 'Student', 'Test', 'fgithub455@gmail.com', 'user', '2026-03-26 08:58:58', NULL, 0, NULL, NULL, 'confirmed', 1, 1, NULL),
+(31, 'test2', '$2y$10$c6GH6SkSv4hYB5CNKMmnOebN5eyfNqeIRmsIZVUYTdAm81TguLqPm', 'Student 1', 'Test', 'hoelykyeow@gmail.com', 'user', '2026-03-26 09:00:22', NULL, 0, NULL, NULL, 'confirmed', 1, 1, NULL),
+(32, 'test3', '$2y$10$4wjfsfXo5tsMiXGaMFX2qOPMj04a24fXQ/CyEP5bdHDgrziXnchWy', 'Student 2', 'Test', 'starrynyx61@gmail.com', 'user', '2026-03-26 09:01:02', NULL, 0, NULL, NULL, 'confirmed', 1, 1, NULL),
+(33, 'jahn', '$2y$10$yDq1XQUeGRPd9SpLw5wzieIp.IXv60qSjLxfJDCs0X/B/Dnb8JxRC', 'Jahn Nickole', 'Verdadero', 'Jaahnverdadero@gmail.com', 'user', '2026-03-26 09:01:45', NULL, 0, NULL, NULL, 'confirmed', 1, 1, NULL),
+(34, 'leeyan', '$2y$10$Ihcx/YXErVJFqMULscr95O8yGcUlpX4lTGQrvbettekMoaCLsdtwG', 'Leeyan', 'Arabia', 'leeyansaurus@gmail.com', 'user', '2026-03-26 09:02:30', NULL, 0, NULL, NULL, 'confirmed', 1, 1, NULL),
+(35, 'test4', '$2y$10$OxzM11U0i6iUNHFvbktZ1u3Ld2f4uwxPi8XDsDVNXyhoabYTthR3G', 'Student 3', 'Test', 'kookylyannarabia@gmail.com', 'user', '2026-03-26 09:03:04', NULL, 0, NULL, NULL, 'confirmed', 1, 1, NULL);
 
 --
 -- Indexes for dumped tables
@@ -602,25 +657,25 @@ ALTER TABLE `users`
 -- AUTO_INCREMENT for table `assessments`
 --
 ALTER TABLE `assessments`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
 
 --
 -- AUTO_INCREMENT for table `assessment_answers`
 --
 ALTER TABLE `assessment_answers`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=45;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=62;
 
 --
 -- AUTO_INCREMENT for table `assessment_attempts`
 --
 ALTER TABLE `assessment_attempts`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=14;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=19;
 
 --
 -- AUTO_INCREMENT for table `assessment_questions`
 --
 ALTER TABLE `assessment_questions`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=22;
 
 --
 -- AUTO_INCREMENT for table `contact_messages`
@@ -632,7 +687,7 @@ ALTER TABLE `contact_messages`
 -- AUTO_INCREMENT for table `courses`
 --
 ALTER TABLE `courses`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=15;
 
 --
 -- AUTO_INCREMENT for table `edit`
@@ -644,7 +699,7 @@ ALTER TABLE `edit`
 -- AUTO_INCREMENT for table `enrollments`
 --
 ALTER TABLE `enrollments`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=57;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=64;
 
 --
 -- AUTO_INCREMENT for table `news`
@@ -656,7 +711,7 @@ ALTER TABLE `news`
 -- AUTO_INCREMENT for table `news_read`
 --
 ALTER TABLE `news_read`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=18;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=21;
 
 --
 -- AUTO_INCREMENT for table `otp_verifications`
@@ -668,7 +723,7 @@ ALTER TABLE `otp_verifications`
 -- AUTO_INCREMENT for table `pdf_progress`
 --
 ALTER TABLE `pdf_progress`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=670;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=754;
 
 --
 -- AUTO_INCREMENT for table `time_logs`
@@ -680,7 +735,7 @@ ALTER TABLE `time_logs`
 -- AUTO_INCREMENT for table `users`
 --
 ALTER TABLE `users`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=28;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=36;
 
 --
 -- Constraints for dumped tables
