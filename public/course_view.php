@@ -474,338 +474,393 @@
             </div>
         </div>
 
-        <script>
-        <?php if(is_student()): ?>
-        // ===== PDF VIEWER WITH INSTANT PAGE TRACKING =====
-        let pdfDoc = null;
-        let totalPages = <?= $totalPdfPages ?>;
-        let pagesViewed = <?= count($pdfProgress) ?>;
-        let viewedPages = <?= json_encode(array_column($pdfProgress, 'page_number')) ?>;
-        let completeBtn = document.getElementById('completeBtn');
-        let pagesContainer = document.getElementById('pdfPages');
-        let pageViewedConfirmed = {};
-        let isCompleted = <?= ($enrollment['status'] ?? '') === 'completed' ? 'true' : 'false' ?>;
-        let isFullscreen = false;
-        const mainContent = document.getElementById('mainContent');
-        const fullscreenBtn = document.getElementById('fullscreenBtn');
-        const assessmentContainer = document.getElementById('assessmentContainer');
+<script>
+<?php if(is_student()): ?>
+// ===== PDF VIEWER WITH 1-SECOND DELAY & 50% VISIBILITY =====
+let pdfDoc = null;
+let totalPages = <?= $totalPdfPages ?>;
+let pagesViewed = <?= count($pdfProgress) ?>;
+let viewedPages = <?= json_encode(array_column($pdfProgress, 'page_number')) ?>;
+let completeBtn = document.getElementById('completeBtn');
+let pagesContainer = document.getElementById('pdfPages');
+let pageViewedConfirmed = {};
+let isCompleted = <?= ($enrollment['status'] ?? '') === 'completed' ? 'true' : 'false' ?>;
+let isFullscreen = false;
+const mainContent = document.getElementById('mainContent');
+const fullscreenBtn = document.getElementById('fullscreenBtn');
+const assessmentContainer = document.getElementById('assessmentContainer');
+
+// Initialize viewedPages as an array and create a Set for faster lookups
+let viewedArray = viewedPages || [];
+let viewedSet = new Set(viewedArray);
+
+// Track which pages have been confirmed by server
+let serverConfirmed = new Set(viewedArray);
+
+// ===== Timer tracking for visible pages =====
+let pageVisibleStart = {};           // Stores when a page became visible
+const VIEW_TIME_REQUIRED = 1000;     // 1 second
+const VISIBILITY_THRESHOLD = 50;     // 50% visible required
+const UPDATE_INTERVAL = 200;         // Update every 200ms
+
+// Update initial UI
+function updateUI() {
+    let progress = Math.min(100, Math.round((pagesViewed / totalPages) * 100));
+    document.getElementById('pagesViewed').textContent = pagesViewed;
+    document.getElementById('progressPercent').textContent = progress + '%';
+    document.getElementById('progressBar').style.width = progress + '%';
+    
+    if (!isCompleted && completeBtn) {
+        if (pagesViewed >= totalPages) {
+            completeBtn.disabled = false;
+        } else {
+            completeBtn.disabled = true;
+        }
+    }
+}
+
+updateUI();
+
+// Load the PDF
+pdfjsLib.getDocument('<?= BASE_URL ?>/uploads/pdf/<?= htmlspecialchars($course['file_pdf']) ?>').promise.then(function(pdf) {
+    pdfDoc = pdf;
+    document.getElementById('totalPages').textContent = pdf.numPages;
+    totalPages = pdf.numPages;
+    updateUI();
+    
+    if (pagesContainer) pagesContainer.innerHTML = '';
+    
+    for (let num = 1; num <= pdf.numPages; num++) {
+        renderPage(num);
+    }
+    
+    setTimeout(checkVisiblePages, 500);
+});
+
+// Render a specific page
+function renderPage(num) {
+    pdfDoc.getPage(num).then(function(page) {
+        const container = document.getElementById('pdfScrollContainer');
+        const containerWidth = container ? container.clientWidth - 40 : 800;
+        const viewport = page.getViewport({ scale: 1 });
+        const scale = containerWidth / viewport.width;
+        const scaledViewport = page.getViewport({ scale: scale });
         
-        // Initialize viewedPages as an array and create a Set for faster lookups
-        let viewedArray = viewedPages || [];
-        let viewedSet = new Set(viewedArray);
+        const pageDiv = document.createElement('div');
+        pageDiv.className = 'pdf-page';
+        pageDiv.id = `page-${num}`;
+        pageDiv.dataset.pageNum = num;
+        pageDiv.style.marginBottom = '15px';
+        pageDiv.style.position = 'relative';
         
-        // Track which pages have been confirmed by server
-        let serverConfirmed = new Set(viewedArray);
+        // Viewed badge (✓)
+        const viewedBadge = document.createElement('div');
+        viewedBadge.className = 'viewed-badge';
+        viewedBadge.textContent = '✓';
+        viewedBadge.style.display = viewedSet.has(num) ? 'block' : 'none';
+        pageDiv.appendChild(viewedBadge);
         
-        // Update initial UI
-        function updateUI() {
-            let progress = Math.min(100, Math.round((pagesViewed / totalPages) * 100));
-            document.getElementById('pagesViewed').textContent = pagesViewed;
-            document.getElementById('progressPercent').textContent = progress + '%';
-            document.getElementById('progressBar').style.width = progress + '%';
+        // Watch indicator (shows progress to 1 second)
+        const watchIndicator = document.createElement('div');
+        watchIndicator.className = 'watch-indicator';
+        watchIndicator.style.cssText = `
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            background: rgba(29, 111, 176, 0.9);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 0;
+            font-size: 12px;
+            border: 2px solid #0f4980;
+            box-shadow: 2px 2px 0 #0b263b;
+            display: none;
+            align-items: center;
+            gap: 6px;
+            z-index: 10;
+            font-family: 'Inter', sans-serif;
+            font-weight: 500;
+        `;
+        watchIndicator.innerHTML = '<i class="fas fa-hourglass-start"></i> <span>0%</span>';
+        pageDiv.appendChild(watchIndicator);
+        
+        const canvas = document.createElement('canvas');
+        canvas.className = 'pdf-canvas';
+        canvas.style.width = '100%';
+        canvas.style.height = 'auto';
+        const ctx = canvas.getContext('2d');
+        
+        canvas.height = scaledViewport.height;
+        canvas.width = scaledViewport.width;
+        
+        pageDiv.appendChild(canvas);
+        pagesContainer.appendChild(pageDiv);
+        
+        const renderContext = {
+            canvasContext: ctx,
+            viewport: scaledViewport
+        };
+        page.render(renderContext);
+    });
+}
+
+// ===== Check visible pages with 50% threshold and 1-second timer =====
+function checkVisiblePages() {
+    if (isCompleted || !pagesContainer) return;
+    
+    const container = document.getElementById('pdfScrollContainer');
+    if (!container) return;
+    
+    const containerRect = container.getBoundingClientRect();
+    const now = Date.now();
+    let currentlyVisible = new Set();
+    
+    for (let num = 1; num <= totalPages; num++) {
+        if (serverConfirmed.has(num)) continue;
+        
+        const pageElement = document.getElementById(`page-${num}`);
+        if (!pageElement) continue;
+        
+        const pageRect = pageElement.getBoundingClientRect();
+        
+        // Calculate visibility percentage
+        const visibleHeight = Math.min(pageRect.bottom, containerRect.bottom) - 
+                             Math.max(pageRect.top, containerRect.top);
+        const pageHeight = pageRect.height;
+        const visibilityPercent = Math.max(0, Math.min(100, (visibleHeight / pageHeight) * 100));
+        const isVisible = visibilityPercent >= VISIBILITY_THRESHOLD;
+        
+        const watchIndicator = pageElement.querySelector('.watch-indicator');
+        
+        if (isVisible) {
+            currentlyVisible.add(num);
             
-            // Check completion - only if not already completed
-            if (!isCompleted && completeBtn) {
-                if (pagesViewed >= totalPages) {
-                    completeBtn.disabled = false;
+            // Start timer if not already started
+            if (!pageVisibleStart[num]) {
+                pageVisibleStart[num] = now;
+            }
+            
+            // Calculate progress
+            const elapsed = now - pageVisibleStart[num];
+            const progress = Math.min(100, Math.round((elapsed / VIEW_TIME_REQUIRED) * 100));
+            
+            // Update indicator
+            if (watchIndicator) {
+                watchIndicator.style.display = 'flex';
+                
+                if (progress < 50) {
+                    watchIndicator.innerHTML = '<i class="fas fa-hourglass-start"></i> <span>0%</span>';
+                } else if (progress < 100) {
+                    watchIndicator.innerHTML = '<i class="fas fa-hourglass-half"></i> <span>50%</span>';
                 } else {
-                    completeBtn.disabled = true;
+                    watchIndicator.innerHTML = '<i class="fas fa-check"></i> <span>Ready</span>';
+                    watchIndicator.style.background = 'rgba(40, 167, 69, 0.9)';
                 }
             }
+            
+            // Check if 1 second has elapsed
+            if (elapsed >= VIEW_TIME_REQUIRED && !pageViewedConfirmed[num]) {
+                trackPageView(num);
+                pageViewedConfirmed[num] = true;
+                
+                const badge = pageElement.querySelector('.viewed-badge');
+                if (badge) badge.style.display = 'block';
+                
+                if (watchIndicator) {
+                    watchIndicator.style.display = 'none';
+                }
+            }
+        } else {
+            // Page not 50% visible - reset timer
+            if (pageVisibleStart[num]) {
+                delete pageVisibleStart[num];
+            }
+            
+            if (watchIndicator) {
+                watchIndicator.style.display = 'none';
+            }
         }
-        
-        // Initial UI update
+    }
+    
+    // Clean up timers for pages no longer visible
+    for (let num in pageVisibleStart) {
+        if (!currentlyVisible.has(parseInt(num))) {
+            delete pageVisibleStart[num];
+            
+            const pageElement = document.getElementById(`page-${num}`);
+            if (pageElement) {
+                const watchIndicator = pageElement.querySelector('.watch-indicator');
+                if (watchIndicator) watchIndicator.style.display = 'none';
+            }
+        }
+    }
+}
+
+// Scroll listener
+const scrollContainer = document.getElementById('pdfScrollContainer');
+if (scrollContainer) {
+    let scrollTimeout;
+    scrollContainer.addEventListener('scroll', function() {
+        clearTimeout(scrollTimeout);
+        scrollTimeout = setTimeout(checkVisiblePages, 100);
+    });
+    
+    // Check every 200ms to update progress indicators
+    setInterval(checkVisiblePages, UPDATE_INTERVAL);
+}
+
+// Track page view (save to database)
+function trackPageView(pageNum) {
+    if (serverConfirmed.has(pageNum) || isCompleted) return;
+    
+    console.log('Page ' + pageNum + ' tracked (1s @ 50%+)');
+    
+    if (!viewedSet.has(pageNum)) {
+        viewedSet.add(pageNum);
+        pagesViewed = viewedSet.size;
         updateUI();
-        
-        // Load the PDF
-        pdfjsLib.getDocument('<?= BASE_URL ?>/uploads/pdf/<?= htmlspecialchars($course['file_pdf']) ?>').promise.then(function(pdf) {
-            pdfDoc = pdf;
-            document.getElementById('totalPages').textContent = pdf.numPages;
-            totalPages = pdf.numPages;
-            updateUI();
-            
-            // Clear container first
-            if (pagesContainer) pagesContainer.innerHTML = '';
-            
-            // Render all pages
-            for (let num = 1; num <= pdf.numPages; num++) {
-                renderPage(num);
+    }
+    
+    // Save to server
+    $.ajax({
+        url: window.location.href,
+        method: 'POST',
+        data: {
+            pdf_page: pageNum,
+            total_pages: totalPages
+        },
+        dataType: 'json',
+        timeout: 5000,
+        success: function(response) {
+            if (response.success) {
+                serverConfirmed.add(pageNum);
+                
+                if (response.pages_viewed !== pagesViewed) {
+                    pagesViewed = response.pages_viewed;
+                    updateUI();
+                }
             }
-            
-            // Initial check after a short delay to ensure rendering
-            setTimeout(checkVisiblePages, 500);
+        },
+        error: function(xhr, status, error) {
+            console.error('Error saving page:', error);
+        }
+    });
+}
+
+// Complete button click
+if (completeBtn) {
+    $('#completeBtn').on('click', function(){
+        let btn = $(this);
+        
+        isCompleted = true;
+        
+        document.getElementById('pagesViewed').textContent = totalPages;
+        document.getElementById('progressPercent').textContent = '100%';
+        document.getElementById('progressBar').style.width = '100%';
+        
+        for (let num = 1; num <= totalPages; num++) {
+            const badge = document.querySelector(`#page-${num} .viewed-badge`);
+            if (badge) badge.style.display = 'block';
+        }
+        
+        const statusContainer = document.querySelector('.status-container');
+        if (statusContainer) {
+            statusContainer.innerHTML = '<span class="badge-completed"><i class="fas fa-check-circle"></i> Completed</span>';
+        }
+        
+        btn.replaceWith(`
+            <div class="alert alert-success mt-3" style="border-radius: 0; border: 2px solid #1e7e34; box-shadow: 3px 3px 0 #166b2c;">
+                <i class="fas fa-graduation-cap"></i>
+                Congratulations! You have successfully completed this course 🎓
+            </div>
+        `);
+        
+        if (assessmentContainer) {
+            assessmentContainer.classList.add('visible');
+        }
+        
+        showToast('🎉 Course completed successfully!', 'success');
+        
+        $.post(window.location.href, { 
+            mark_completed: 1,
+            total_pages: totalPages 
+        }).done(function(response) {
+            if (response.success) {
+                console.log('Server confirmed completion');
+            }
+        }).fail(function() {
+            console.log('Background server update failed');
         });
+    });
+}
+
+// Fullscreen toggle
+if (fullscreenBtn) {
+    fullscreenBtn.addEventListener('click', function() {
+        isFullscreen = !isFullscreen;
         
-        // Render a specific page
-        function renderPage(num) {
-            pdfDoc.getPage(num).then(function(page) {
-                // Calculate scale to fit width
-                const container = document.getElementById('pdfScrollContainer');
-                const containerWidth = container ? container.clientWidth - 40 : 800;
-                const viewport = page.getViewport({ scale: 1 });
-                const scale = containerWidth / viewport.width;
-                const scaledViewport = page.getViewport({ scale: scale });
-                
-                // Create container for this page
-                const pageDiv = document.createElement('div');
-                pageDiv.className = 'pdf-page';
-                pageDiv.id = `page-${num}`;
-                pageDiv.dataset.pageNum = num;
-                pageDiv.style.marginBottom = '15px';
-                
-                // Add a visual indicator for viewed pages
-                const viewedBadge = document.createElement('div');
-                viewedBadge.className = 'viewed-badge';
-                viewedBadge.textContent = '✓ Viewed';
-                viewedBadge.style.display = viewedSet.has(num) ? 'block' : 'none';
-                pageDiv.appendChild(viewedBadge);
-                
-                // Create canvas for this page
-                const canvas = document.createElement('canvas');
-                canvas.className = 'pdf-canvas';
-                canvas.style.width = '100%';
-                canvas.style.height = 'auto';
-                const ctx = canvas.getContext('2d');
-                
-                canvas.height = scaledViewport.height;
-                canvas.width = scaledViewport.width;
-                
-                pageDiv.appendChild(canvas);
-                pagesContainer.appendChild(pageDiv);
-                
-                // Render the page
-                const renderContext = {
-                    canvasContext: ctx,
-                    viewport: scaledViewport
-                };
-                page.render(renderContext);
-            });
+        if (isFullscreen) {
+            mainContent.classList.add('fullscreen-mode');
+            fullscreenBtn.innerHTML = '<i class="fas fa-compress"></i> Exit Fullscreen';
+        } else {
+            mainContent.classList.remove('fullscreen-mode');
+            fullscreenBtn.innerHTML = '<i class="fas fa-expand"></i> Fullscreen';
         }
         
-        // Check which pages are visible in the viewport
-        function checkVisiblePages() {
-            if (isCompleted || !pagesContainer) return; // Stop tracking if completed
-            
-            const container = document.getElementById('pdfScrollContainer');
-            if (!container) return;
-            
-            const containerRect = container.getBoundingClientRect();
-            
-            // Check each page
-            for (let num = 1; num <= totalPages; num++) {
-                const pageElement = document.getElementById(`page-${num}`);
-                if (!pageElement) continue;
-                
-                const pageRect = pageElement.getBoundingClientRect();
-                
-                // Page is considered visible if any part of it is in the viewport
-                const isVisible = (
-                    pageRect.top < containerRect.bottom &&
-                    pageRect.bottom > containerRect.top
-                );
-                
-                if (isVisible && !pageViewedConfirmed[num] && !serverConfirmed.has(num)) {
-                    // Track immediately when page becomes visible
-                    trackPageView(num);
-                    pageViewedConfirmed[num] = true;
-                    
-                    // Update the viewed badge
-                    const badge = pageElement.querySelector('.viewed-badge');
-                    if (badge) badge.style.display = 'block';
-                }
-            }
-        }
+        setTimeout(() => {
+            window.dispatchEvent(new Event('resize'));
+        }, 100);
+    });
+}
+
+// Handle ESC key to exit fullscreen
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && isFullscreen) {
+        isFullscreen = false;
+        mainContent.classList.remove('fullscreen-mode');
+        fullscreenBtn.innerHTML = '<i class="fas fa-expand"></i> Fullscreen';
         
-        // Add scroll listener for instant tracking
-        const scrollContainer = document.getElementById('pdfScrollContainer');
-        if (scrollContainer) {
-            scrollContainer.addEventListener('scroll', function() {
-                checkVisiblePages();
-            });
-        }
-        
-        // Track page view
-        function trackPageView(pageNum) {
-            // Don't track if already confirmed by server or completed
-            if (serverConfirmed.has(pageNum) || isCompleted) {
-                return;
-            }
-            
-            console.log('Tracking new page:', pageNum);
-            
-            // Update UI immediately
-            if (!viewedSet.has(pageNum)) {
-                viewedSet.add(pageNum);
-                pagesViewed = viewedSet.size;
-                
-                // Calculate new progress
-                let newProgress = Math.min(100, Math.round((pagesViewed / totalPages) * 100));
-                
-                // Update UI instantly
-                document.getElementById('pagesViewed').textContent = pagesViewed;
-                document.getElementById('progressPercent').textContent = newProgress + '%';
-                document.getElementById('progressBar').style.width = newProgress + '%';
-                
-                // Check completion - only if not already completed
-                if (!isCompleted && completeBtn) {
-                    if (pagesViewed >= totalPages) {
-                        completeBtn.disabled = false;
-                    }
-                }
-            }
-            
-            // Send to server (async - doesn't block UI)
-            $.ajax({
-                url: window.location.href,
-                method: 'POST',
-                data: {
-                    pdf_page: pageNum,
-                    total_pages: totalPages
-                },
-                dataType: 'json',
-                timeout: 5000,
-                success: function(response) {
-                    if (response.success) {
-                        console.log('Server confirmed page', pageNum);
-                        serverConfirmed.add(pageNum);
-                        
-                        // Update with server values if they differ
-                        if (response.pages_viewed !== pagesViewed) {
-                            pagesViewed = response.pages_viewed;
-                            viewedSet = new Set([...Array(pagesViewed).keys()].map(i => i + 1));
-                            updateUI();
-                        }
-                    }
-                },
-                error: function(xhr, status, error) {
-                    console.error('Error tracking page:', error);
-                }
-            });
-        }
+        setTimeout(() => {
+            window.dispatchEvent(new Event('resize'));
+        }, 100);
+    }
+});
 
-        // Complete button click - FIXED FOR INSTANT COMPLETION AND ASSESSMENT BUTTON
-        if (completeBtn) {
-            $('#completeBtn').on('click', function(){
-                let btn = $(this);
-                
-                // Immediately update UI - don't wait for server
-                isCompleted = true;
-                
-                // Update progress displays
-                document.getElementById('pagesViewed').textContent = totalPages;
-                document.getElementById('progressPercent').textContent = '100%';
-                document.getElementById('progressBar').style.width = '100%';
-                
-                // Update all viewed badges
-                for (let num = 1; num <= totalPages; num++) {
-                    const badge = document.querySelector(`#page-${num} .viewed-badge`);
-                    if (badge) badge.style.display = 'block';
-                }
-                
-                // Update status badge
-                const statusContainer = document.querySelector('.status-container');
-                if (statusContainer) {
-                    statusContainer.innerHTML = '<span class="badge-completed"><i class="fas fa-check-circle"></i> Completed</span>';
-                }
-                
-                // Remove complete button and show success message
-                btn.replaceWith(`
-                    <div class="alert alert-success mt-3" style="border-radius: 0; border: 2px solid #1e7e34; box-shadow: 3px 3px 0 #166b2c;">
-                        <i class="fas fa-graduation-cap"></i>
-                        Congratulations! You have successfully completed this course 🎓
-                    </div>
-                `);
-                
-                // Show the assessment button immediately
-                if (assessmentContainer) {
-                    assessmentContainer.classList.add('visible');
-                }
-                
-                showToast('🎉 Course completed successfully!', 'success');
-                
-                // Send to server in background (don't wait for response)
-                $.post(window.location.href, { 
-                    mark_completed: 1,
-                    total_pages: totalPages 
-                }).done(function(response) {
-                    if (response.success) {
-                        console.log('Server confirmed completion');
-                    }
-                }).fail(function() {
-                    console.log('Background server update failed - but course is still completed locally');
-                });
-            });
-        }
+// Toast notification function (only used for completion)
+function showToast(message, type = 'success') {
+    const toast = $(`
+        <div class="alert alert-${type} alert-dismissible fade show" style="border-radius: 0; border: 2px solid ${type === 'success' ? '#28a745' : type === 'warning' ? '#ffc107' : '#dc3545'}; box-shadow: 3px 3px 0 ${type === 'success' ? '#166b2c' : type === 'warning' ? '#8f6f1a' : '#a11717'};">
+            <i class="fas ${type === 'success' ? 'fa-check-circle' : type === 'warning' ? 'fa-exclamation-triangle' : 'fa-exclamation-circle'} me-2"></i>
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    `);
 
-        // Fullscreen toggle
-        if (fullscreenBtn) {
-            fullscreenBtn.addEventListener('click', function() {
-                isFullscreen = !isFullscreen;
-                
-                if (isFullscreen) {
-                    mainContent.classList.add('fullscreen-mode');
-                    fullscreenBtn.innerHTML = '<i class="fas fa-compress"></i> Exit Fullscreen';
-                } else {
-                    mainContent.classList.remove('fullscreen-mode');
-                    fullscreenBtn.innerHTML = '<i class="fas fa-expand"></i> Fullscreen';
-                }
-                
-                // Trigger resize to redraw PDF pages with new dimensions
-                setTimeout(() => {
-                    window.dispatchEvent(new Event('resize'));
-                }, 100);
-            });
-        }
+    $('#toastContainer').append(toast);
 
-        // Handle ESC key to exit fullscreen
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape' && isFullscreen) {
-                isFullscreen = false;
-                mainContent.classList.remove('fullscreen-mode');
-                fullscreenBtn.innerHTML = '<i class="fas fa-expand"></i> Fullscreen';
-                
-                // Trigger resize
-                setTimeout(() => {
-                    window.dispatchEvent(new Event('resize'));
-                }, 100);
-            }
-        });
+    setTimeout(() => {
+        toast.fadeOut(500, function() { $(this).remove(); });
+    }, 5000);
+}
 
-        // Toast notification function
-        function showToast(message, type = 'success') {
-            const toast = $(`
-                <div class="alert alert-${type} alert-dismissible fade show" style="border-radius: 0; border: 2px solid ${type === 'success' ? '#28a745' : type === 'warning' ? '#ffc107' : '#dc3545'}; box-shadow: 3px 3px 0 ${type === 'success' ? '#166b2c' : type === 'warning' ? '#8f6f1a' : '#a11717'};">
-                    <i class="fas ${type === 'success' ? 'fa-check-circle' : type === 'warning' ? 'fa-exclamation-triangle' : 'fa-exclamation-circle'} me-2"></i>
-                    ${message}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                </div>
-            `);
+<?php endif; ?>
 
-            $('#toastContainer').append(toast);
+// Animation on load
+document.addEventListener('DOMContentLoaded', function() {
+    const cards = document.querySelectorAll('.content-card, .progress-section, .course-info-card, .course-header');
+    cards.forEach((card, index) => {
+        card.style.opacity = '0';
+        card.style.transform = 'translateY(20px)';
+        card.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
 
-            setTimeout(() => {
-                toast.fadeOut(500, function() { $(this).remove(); });
-            }, 5000);
-        }
+        setTimeout(() => {
+            card.style.opacity = '1';
+            card.style.transform = 'translateY(0)';
+        }, index * 100);
+    });
+});
+</script>
 
-        <?php endif; ?>
-
-        // Animation on load
-        document.addEventListener('DOMContentLoaded', function() {
-            const cards = document.querySelectorAll('.content-card, .progress-section, .course-info-card, .course-header');
-            cards.forEach((card, index) => {
-                card.style.opacity = '0';
-                card.style.transform = 'translateY(20px)';
-                card.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
-
-                setTimeout(() => {
-                    card.style.opacity = '1';
-                    card.style.transform = 'translateY(0)';
-                }, index * 100);
-            });
-        });
-        </script>
-
-        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-    </body>
-    </html>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

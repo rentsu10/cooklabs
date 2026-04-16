@@ -56,32 +56,33 @@
             object-fit: contain;
         }
 
-        /* profile section */
-        .nav-item:first-child .nav-link {
-            background: #d7e9ff;
-            border: 2px solid #15415e;
-            box-shadow: 6px 6px 0 #1b3b58;
-            margin-bottom: 1.5rem;
-            padding: 1rem;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            border-radius: 0px;
-        }
+/* profile section */
+.nav-item:first-child .nav-link {
+    background: #d7e9ff;
+    border: 2px solid #15415e;
+    box-shadow: 6px 6px 0 #1b3b58;
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-radius: 0px;
+}
 
-/* CIRCLE AVATAR with consistent blue border, white background, blue icon */
+/* CIRCLE AVATAR - now protected from squishing */
 .profile-icon-mini {
     width: 48px;
     height: 48px;
-    border-radius: 50%;  /* CIRCLE */
+    border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 1.5rem;
-    background: white;  /* White background */
-    border: 2px solid #1d6fb0;  /* Blue border */
-    box-shadow: 4px 4px 0 #0f4980;  /* Darker blue shadow */
-    color: #1d6fb0;  /* Blue icon */
+    background: white;
+    border: 2px solid #1d6fb0;
+    box-shadow: 4px 4px 0 #0f4980;
+    color: #1d6fb0;
+    flex-shrink: 0;  /* ← KEY FIX: prevents squishing */
 }
 
 .profile-icon-mini i {
@@ -89,7 +90,12 @@
     align-items: center;
     justify-content: center;
     line-height: 1;
-    transform: translateX(.5px);  /* Move icon 3px to the right */
+    transform: translateX(.5px);
+}
+
+.profile-details-mini {
+    overflow: hidden;
+    min-width: 0;
 }
 
 .profile-details-mini h6 {
@@ -98,12 +104,20 @@
     color: #07223b;
     font-size: 1rem;
     line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 140px;
 }
 
 .profile-details-mini small {
     color: #1e4465;
     font-weight: 500;
     font-size: 0.8rem;
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
         /* navigation items */

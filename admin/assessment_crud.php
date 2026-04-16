@@ -160,23 +160,32 @@ if ($assessment) {
             font-family: 'Inter', sans-serif;
             background: #eaf2fc;
             display: flex;
+            min-height: 100vh;
         }
         .lms-sidebar-container {
             position: fixed;
             left: 0;
             top: 0;
-            width: 280px;
+            width: 260px;
             height: 100vh;
             z-index: 1000;
         }
         .main-content {
-            margin-left: 280px;
+            margin-left: 260px;
             flex: 1;
             padding: 2rem;
             min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .content-wrapper {
+            width: 100%;
+            max-width: 1000px;
         }
         .page-header {
             margin-bottom: 2rem;
+            width: 100%;
         }
         .page-header h2 {
             font-size: 2rem;
@@ -197,7 +206,7 @@ if ($assessment) {
             box-shadow: 12px 12px 0 #123a5e;
             padding: 2rem;
             border-radius: 0;
-            max-width: 1000px;
+            width: 100%;
             margin-bottom: 2rem;
         }
         .form-card h3 {
@@ -243,11 +252,11 @@ if ($assessment) {
             box-shadow: 4px 4px 0 #0b263b;
             padding: 0.8rem 2rem;
             color: white;
-            border: none;
             font-weight: 600;
             cursor: pointer;
             border-radius: 0;
             font-size: 1rem;
+            transition: all 0.1s ease;
         }
         .btn-primary:hover {
             transform: translate(-2px, -2px);
@@ -265,6 +274,7 @@ if ($assessment) {
             display: inline-block;
             border-radius: 0;
             font-size: 1rem;
+            transition: all 0.1s ease;
         }
         .btn-secondary:hover {
             transform: translate(-2px, -2px);
@@ -277,11 +287,11 @@ if ($assessment) {
             box-shadow: 4px 4px 0 #166b2c;
             padding: 0.6rem 1.5rem;
             color: white;
-            border: none;
             font-weight: 600;
             cursor: pointer;
             border-radius: 0;
             font-size: 0.95rem;
+            transition: all 0.1s ease;
         }
         .btn-add-question:hover {
             transform: translate(-2px, -2px);
@@ -294,12 +304,12 @@ if ($assessment) {
             box-shadow: 4px 4px 0 #5a0e0e;
             padding: 0.5rem 1rem;
             color: white;
-            border: none;
             font-weight: 600;
             cursor: pointer;
             border-radius: 0;
             font-size: 0.8rem;
             width: 100%;
+            transition: all 0.1s ease;
         }
         .btn-remove-question:hover {
             transform: translate(-2px, -2px);
@@ -312,7 +322,7 @@ if ($assessment) {
             border: 2px solid;
             box-shadow: 4px 4px 0 rgba(0,0,0,0.1);
             border-radius: 0;
-            max-width: 1000px;
+            width: 100%;
         }
         .alert-success {
             background: #e8f5e9;
@@ -385,6 +395,17 @@ if ($assessment) {
             display: flex;
             gap: 1rem;
         }
+        @media (max-width: 768px) {
+            .row {
+                grid-template-columns: 1fr;
+            }
+            .options-grid {
+                grid-template-columns: 1fr;
+            }
+            .main-content {
+                padding: 1rem;
+            }
+        }
     </style>
 </head>
 <body>
@@ -393,153 +414,155 @@ if ($assessment) {
     </div>
 
     <div class="main-content">
-        <div class="page-header">
-            <h2>Assessment Builder</h2>
-            <p>Course: <strong><?= htmlspecialchars($course['title']) ?></strong></p>
-        </div>
+        <div class="content-wrapper">
+            <div class="page-header">
+                <h2>Assessment Builder</h2>
+                <p>Course: <strong><?= htmlspecialchars($course['title']) ?></strong></p>
+            </div>
 
-        <?php if (isset($_SESSION['success'])): ?>
-            <div class="alert alert-success"><?= $_SESSION['success']; unset($_SESSION['success']); ?></div>
-        <?php endif; ?>
-        <?php if (isset($_SESSION['error'])): ?>
-            <div class="alert alert-danger"><?= $_SESSION['error']; unset($_SESSION['error']); ?></div>
-        <?php endif; ?>
-        <?php if (isset($_SESSION['warning'])): ?>
-            <div class="alert alert-warning"><?= $_SESSION['warning']; unset($_SESSION['warning']); ?></div>
-        <?php endif; ?>
+            <?php if (isset($_SESSION['success'])): ?>
+                <div class="alert alert-success"><?= $_SESSION['success']; unset($_SESSION['success']); ?></div>
+            <?php endif; ?>
+            <?php if (isset($_SESSION['error'])): ?>
+                <div class="alert alert-danger"><?= $_SESSION['error']; unset($_SESSION['error']); ?></div>
+            <?php endif; ?>
+            <?php if (isset($_SESSION['warning'])): ?>
+                <div class="alert alert-warning"><?= $_SESSION['warning']; unset($_SESSION['warning']); ?></div>
+            <?php endif; ?>
 
-        <form method="POST" id="assessmentForm">
-            <?php csrfField(); ?>
-            <input type="hidden" name="save_assessment" value="1">
-            
-            <!-- Assessment Settings Card -->
-            <div class="form-card">
-                <h3><i class="fas fa-file-alt" style="color: #1d6fb0; margin-right: 8px;"></i> Assessment Settings</h3>
+            <form method="POST" id="assessmentForm">
+                <?php csrfField(); ?>
+                <input type="hidden" name="save_assessment" value="1">
                 
-                <div>
-                    <label class="form-label">Assessment Title</label>
-                    <input type="text" name="title" class="form-control" 
-                           value="<?= $assessment ? htmlspecialchars($assessment['title']) : '' ?>" 
-                           placeholder="e.g., Module 1 Final Quiz" required>
-                </div>
-
-                <div>
-                    <label class="form-label">Description (Optional)</label>
-                    <textarea name="description" class="form-control" 
-                              placeholder="Brief description of the assessment"><?= $assessment ? htmlspecialchars($assessment['description']) : '' ?></textarea>
-                </div>
-
-                <div class="row">
-                    <div>
-                        <label class="form-label">Time Limit (minutes)</label>
-                        <input type="number" name="time_limit" class="form-control" 
-                               value="<?= $assessment ? $assessment['time_limit'] : '' ?>" 
-                               placeholder="Leave blank for no limit" min="1">
-                    </div>
-
-                    <div>
-                        <label class="form-label">Attempts Allowed</label>
-                        <input type="number" name="attempts_allowed" class="form-control" 
-                               value="<?= $assessment ? $assessment['attempts_allowed'] : '' ?>" 
-                               placeholder="Leave blank for unlimited" min="1">
-                    </div>
-
-                    <div>
-                        <label class="form-label">Passing Score (%)</label>
-                        <input type="number" name="passing_score" class="form-control" 
-                               value="<?= $assessment ? $assessment['passing_score'] : '75' ?>" 
-                               min="0" max="100" required>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Questions Section -->
-            <div class="form-card" style="margin-top: 2rem;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-                    <h3 style="margin: 0; border-left: 6px solid #1d6fb0; padding-left: 1rem;">
-                        <i class="fas fa-list" style="color: #1d6fb0; margin-right: 8px;"></i>
-                        Questions (<span id="questionCount">0</span>/50)
-                    </h3>
-                </div>
-
-                <div id="questionsContainer">
-                    <?php if (!empty($questions)): ?>
-                        <?php foreach ($questions as $index => $q): ?>
-                            <div class="question-item" data-index="<?= $index ?>">
-                                <div class="question-number"><?= $index + 1 ?></div>
-                                <input type="hidden" name="questions[<?= $index ?>][id]" value="<?= $q['id'] ?>">
-                                
-                                <div style="margin-bottom: 1rem;">
-                                    <label class="form-label">Question <?= $index + 1 ?></label>
-                                    <textarea name="questions[<?= $index ?>][text]" class="form-control" rows="2" placeholder="Enter your question here..." required><?= htmlspecialchars($q['question_text']) ?></textarea>
-                                </div>
-
-                                <div class="options-grid">
-                                    <div>
-                                        <label class="form-label">Option A</label>
-                                        <input type="text" name="questions[<?= $index ?>][option_a]" class="form-control" placeholder="Enter option A" value="<?= htmlspecialchars($q['option_a']) ?>" required>
-                                    </div>
-                                    <div>
-                                        <label class="form-label">Option B</label>
-                                        <input type="text" name="questions[<?= $index ?>][option_b]" class="form-control" placeholder="Enter option B" value="<?= htmlspecialchars($q['option_b']) ?>" required>
-                                    </div>
-                                    <div>
-                                        <label class="form-label">Option C (Optional)</label>
-                                        <input type="text" name="questions[<?= $index ?>][option_c]" class="form-control" placeholder="Enter option C" value="<?= htmlspecialchars($q['option_c']) ?>">
-                                    </div>
-                                    <div>
-                                        <label class="form-label">Option D (Optional)</label>
-                                        <input type="text" name="questions[<?= $index ?>][option_d]" class="form-control" placeholder="Enter option D" value="<?= htmlspecialchars($q['option_d']) ?>">
-                                    </div>
-                                </div>
-
-                                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin-top: 1rem;">
-                                    <div>
-                                        <label class="form-label">Correct Option</label>
-                                        <select name="questions[<?= $index ?>][correct_option]" class="form-control" required>
-                                            <option value="A" <?= $q['correct_option'] == 'A' ? 'selected' : '' ?>>A</option>
-                                            <option value="B" <?= $q['correct_option'] == 'B' ? 'selected' : '' ?>>B</option>
-                                            <option value="C" <?= $q['correct_option'] == 'C' ? 'selected' : '' ?>>C</option>
-                                            <option value="D" <?= $q['correct_option'] == 'D' ? 'selected' : '' ?>>D</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label class="form-label">Points</label>
-                                        <input type="number" name="questions[<?= $index ?>][points]" class="form-control" value="<?= $q['points'] ?>" min="1" required>
-                                    </div>
-                                    <div style="display: flex; align-items: flex-end;">
-                                        <button type="button" class="btn-remove-question" onclick="removeQuestion(this)">
-                                            <i class="fas fa-trash"></i> Remove
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        <?php endforeach; ?>
-                    <?php endif; ?>
-                </div>
-
-                <div id="noQuestionsMessage" class="info-note" style="text-align: center; padding: 2rem; <?= !empty($questions) ? 'display: none;' : '' ?>">
-                    <i class="fas fa-question-circle" style="font-size: 2rem; margin-bottom: 0.5rem; display: block;"></i>
-                    <p>No questions yet. Click "Add Question" to start building your assessment.</p>
-                </div>
-
-                <!-- Bottom Button Bar -->
-                <div class="button-bar-bottom">
-                    <button type="button" id="addQuestionBtn" class="btn-add-question">
-                        <i class="fas fa-plus"></i> Add Question
-                    </button>
+                <!-- Assessment Settings Card -->
+                <div class="form-card">
+                    <h3><i class="fas fa-file-alt" style="color: #1d6fb0; margin-right: 8px;"></i> Assessment Settings</h3>
                     
-                    <div class="right-buttons">
-                        <button type="submit" class="btn-primary">
-                            <i class="fas fa-save"></i> Save Assessment
-                        </button>
-                        <a href="courses_crud.php" class="btn-secondary" id="cancelBtn">
-                            <i class="fas fa-times"></i> Cancel
-                        </a>
+                    <div>
+                        <label class="form-label">Assessment Title</label>
+                        <input type="text" name="title" class="form-control" 
+                               value="<?= $assessment ? htmlspecialchars($assessment['title']) : '' ?>" 
+                               placeholder="e.g., Module 1 Final Quiz" required>
+                    </div>
+
+                    <div>
+                        <label class="form-label">Instruction (Optional)</label>
+                        <textarea name="description" class="form-control" 
+                                  placeholder="Brief instruction for the assessment"><?= $assessment ? htmlspecialchars($assessment['description']) : '' ?></textarea>
+                    </div>
+
+                    <div class="row">
+                        <div>
+                            <label class="form-label">Time Limit (minutes)</label>
+                            <input type="number" name="time_limit" class="form-control" 
+                                   value="<?= $assessment ? $assessment['time_limit'] : '' ?>" 
+                                   placeholder="No limit" min="1">
+                        </div>
+
+                        <div>
+                            <label class="form-label">Attempts Allowed</label>
+                            <input type="number" name="attempts_allowed" class="form-control" 
+                                   value="<?= $assessment ? $assessment['attempts_allowed'] : '' ?>" 
+                                   placeholder="Unlimited" min="1">
+                        </div>
+
+                        <div>
+                            <label class="form-label">Passing Score (%)</label>
+                            <input type="number" name="passing_score" class="form-control" 
+                                   value="<?= $assessment ? $assessment['passing_score'] : '75' ?>" 
+                                   min="0" max="100" required>
+                        </div>
                     </div>
                 </div>
-            </div>
-        </form>
+
+                <!-- Questions Section -->
+                <div class="form-card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                        <h3 style="margin: 0; border-left: 6px solid #1d6fb0; padding-left: 1rem;">
+                            <i class="fas fa-list" style="color: #1d6fb0; margin-right: 8px;"></i>
+                            Questions (<span id="questionCount">0</span>/50)
+                        </h3>
+                    </div>
+
+                    <div id="questionsContainer">
+                        <?php if (!empty($questions)): ?>
+                            <?php foreach ($questions as $index => $q): ?>
+                                <div class="question-item" data-index="<?= $index ?>">
+                                    <div class="question-number"><?= $index + 1 ?></div>
+                                    <input type="hidden" name="questions[<?= $index ?>][id]" value="<?= $q['id'] ?>">
+                                    
+                                    <div style="margin-bottom: 1rem;">
+                                        <label class="form-label">Question <?= $index + 1 ?></label>
+                                        <textarea name="questions[<?= $index ?>][text]" class="form-control" rows="2" placeholder="Enter your question here..." required><?= htmlspecialchars($q['question_text']) ?></textarea>
+                                    </div>
+
+                                    <div class="options-grid">
+                                        <div>
+                                            <label class="form-label">Option A</label>
+                                            <input type="text" name="questions[<?= $index ?>][option_a]" class="form-control" placeholder="Enter option A" value="<?= htmlspecialchars($q['option_a']) ?>" required>
+                                        </div>
+                                        <div>
+                                            <label class="form-label">Option B</label>
+                                            <input type="text" name="questions[<?= $index ?>][option_b]" class="form-control" placeholder="Enter option B" value="<?= htmlspecialchars($q['option_b']) ?>" required>
+                                        </div>
+                                        <div>
+                                            <label class="form-label">Option C (Optional)</label>
+                                            <input type="text" name="questions[<?= $index ?>][option_c]" class="form-control" placeholder="Enter option C" value="<?= htmlspecialchars($q['option_c']) ?>">
+                                        </div>
+                                        <div>
+                                            <label class="form-label">Option D (Optional)</label>
+                                            <input type="text" name="questions[<?= $index ?>][option_d]" class="form-control" placeholder="Enter option D" value="<?= htmlspecialchars($q['option_d']) ?>">
+                                        </div>
+                                    </div>
+
+                                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin-top: 1rem;">
+                                        <div>
+                                            <label class="form-label">Correct Option</label>
+                                            <select name="questions[<?= $index ?>][correct_option]" class="form-control" required>
+                                                <option value="A" <?= $q['correct_option'] == 'A' ? 'selected' : '' ?>>A</option>
+                                                <option value="B" <?= $q['correct_option'] == 'B' ? 'selected' : '' ?>>B</option>
+                                                <option value="C" <?= $q['correct_option'] == 'C' ? 'selected' : '' ?>>C</option>
+                                                <option value="D" <?= $q['correct_option'] == 'D' ? 'selected' : '' ?>>D</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label class="form-label">Points</label>
+                                            <input type="number" name="questions[<?= $index ?>][points]" class="form-control" value="<?= $q['points'] ?>" min="1" required>
+                                        </div>
+                                        <div style="display: flex; align-items: flex-end;">
+                                            <button type="button" class="btn-remove-question" onclick="removeQuestion(this)">
+                                                <i class="fas fa-trash"></i> Remove
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </div>
+
+                    <div id="noQuestionsMessage" class="info-note" style="text-align: center; padding: 2rem; <?= !empty($questions) ? 'display: none;' : '' ?>">
+                        <i class="fas fa-question-circle" style="font-size: 2rem; margin-bottom: 0.5rem; display: block;"></i>
+                        <p>No questions yet. Click "Add Question" to start building your assessment.</p>
+                    </div>
+
+                    <!-- Bottom Button Bar -->
+                    <div class="button-bar-bottom">
+                        <button type="button" id="addQuestionBtn" class="btn-add-question">
+                            <i class="fas fa-plus"></i> Add Question
+                        </button>
+                        
+                        <div class="right-buttons">
+                            <button type="submit" class="btn-primary">
+                                <i class="fas fa-save"></i> Save Assessment
+                            </button>
+                            <a href="courses_crud.php" class="btn-secondary" id="cancelBtn">
+                                <i class="fas fa-times"></i> Cancel
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
     </div>
 
     <script>
@@ -565,19 +588,16 @@ if ($assessment) {
         function hasDuplicateOptions(questionItem) {
             const options = [];
             
-            // Get all option inputs for this question
             const optionA = questionItem.querySelector('input[name*="[option_a]"]')?.value.trim();
             const optionB = questionItem.querySelector('input[name*="[option_b]"]')?.value.trim();
             const optionC = questionItem.querySelector('input[name*="[option_c]"]')?.value.trim();
             const optionD = questionItem.querySelector('input[name*="[option_d]"]')?.value.trim();
             
-            // Add non-empty options to array
             if (optionA) options.push(optionA);
             if (optionB) options.push(optionB);
             if (optionC) options.push(optionC);
             if (optionD) options.push(optionD);
             
-            // Check for duplicates
             return new Set(options).size !== options.length;
         }
         
@@ -591,14 +611,11 @@ if ($assessment) {
                     alert(`Question ${index + 1} has duplicate options. Each option must be unique.`);
                     hasError = true;
                     
-                    // Highlight the question with error
                     item.style.border = '3px solid #b71c1c';
                     item.style.boxShadow = '3px 3px 0 #5a0e0e';
                     
-                    // Scroll to the error
                     item.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 } else {
-                    // Reset styling if no error
                     item.style.border = '2px solid #b8d6f5';
                     item.style.boxShadow = '3px 3px 0 #a0c0e0';
                 }
@@ -614,7 +631,7 @@ if ($assessment) {
                 return false;
             }
             isSubmitting = true;
-            formChanged = false; // Reset the change tracker
+            formChanged = false;
         });
         
         // Add question button
@@ -682,10 +699,7 @@ if ($assessment) {
             questionIndex++;
             formChanged = true;
             
-            // Hide the no questions message
             noQuestionsMsg.style.display = 'none';
-            
-            // Update question count display
             document.getElementById('questionCount').textContent = questionIndex;
         });
         
@@ -696,19 +710,16 @@ if ($assessment) {
                 questionIndex--;
                 formChanged = true;
                 
-                // Renumber remaining questions
                 const questions = document.querySelectorAll('.question-item');
                 questions.forEach((item, idx) => {
                     item.dataset.index = idx;
                     item.querySelector('.question-number').textContent = idx + 1;
                     
-                    // Update labels
                     const label = item.querySelector('.form-label');
                     if (label && label.textContent.includes('Question')) {
                         label.textContent = `Question ${idx + 1}`;
                     }
                     
-                    // Update all name attributes
                     const textarea = item.querySelector('textarea[name*="[text]"]');
                     const optionA = item.querySelector('input[name*="[option_a]"]');
                     const optionB = item.querySelector('input[name*="[option_b]"]');
@@ -726,7 +737,6 @@ if ($assessment) {
                     if (points) points.name = `questions[${idx}][points]`;
                 });
                 
-                // Revalidate all questions after removal to clear any error highlights
                 setTimeout(() => {
                     const questions = document.querySelectorAll('.question-item');
                     questions.forEach(item => {
@@ -737,17 +747,15 @@ if ($assessment) {
                     });
                 }, 100);
                 
-                // Show no questions message if empty
                 if (questions.length === 0) {
                     document.getElementById('noQuestionsMessage').style.display = 'block';
                 }
                 
-                // Update question count display
                 document.getElementById('questionCount').textContent = questions.length;
             }
         }
         
-        // Add real-time validation on option inputs
+        // Real-time validation on option inputs
         document.addEventListener('input', function(e) {
             if (e.target.matches('input[name*="[option_a]"], input[name*="[option_b]"], input[name*="[option_c]"], input[name*="[option_d]"]')) {
                 const questionItem = e.target.closest('.question-item');
@@ -763,7 +771,7 @@ if ($assessment) {
             }
         });
         
-        // Page leave warning - only if not submitting
+        // Page leave warning
         window.addEventListener('beforeunload', function(e) {
             if (formChanged && !isSubmitting) {
                 e.preventDefault();

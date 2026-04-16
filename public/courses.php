@@ -383,6 +383,7 @@ $totalPages = ceil($totalCount / $limit);
                     <?php else: ?>
                         <!-- NOT ENROLLED - Show Enroll button -->
                         <form method="POST" action="<?= BASE_URL ?>/public/enroll.php" style="display: inline;">
+                            <?= csrfField() ?>
                             <input type="hidden" name="course_id" value="<?= $c['id'] ?>">
                             <button type="submit" class="modern-btn-primary modern-btn-sm" 
                                 onclick="return confirm('Enroll in this course?');">

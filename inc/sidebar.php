@@ -7,7 +7,7 @@ $u = current_user();
 // Dynamically define BASE_URL if not defined
 if(!defined('BASE_URL')) {
     $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' || $_SERVER['SERVER_PORT'] == 443) ? "https://" : "http://";
-    define('BASE_URL', $protocol . $_SERVER['HTTP_HOST'] . '/lms');
+    define('BASE_URL', $protocol . $_SERVER['HTTP_HOST'] . '/cooklabs');
 }
 
 // Function to get role icon
@@ -80,15 +80,11 @@ function get_role_display_name($role) {
                             <i class="fas <?= get_role_icon($u['role'] ?? '') ?>"></i>
                         </div>
                         <div class="profile-details-mini">
-                            <h6 title="<?= htmlspecialchars($u['fname'] ?? '') ?>">
-                                 <?= htmlspecialchars($u['fname'] ?? '') ?>
-                                 <?= htmlspecialchars($u['lname'] ?? '') ?>
+                            <h6 title="<?= htmlspecialchars(($u['fname'] ?? '') . ' ' . ($u['lname'] ?? '')) ?>">
+                                <?= htmlspecialchars($u['fname'] ?? 'User') ?>
                             </h6>
                             <small>
-                                <?php 
-                                // Now using the function defined right here in sidebar.php
-                                echo htmlspecialchars(get_role_display_name($u['role'] ?? 'Guest'));
-                                ?>
+                                <?= htmlspecialchars(get_role_display_name($u['role'] ?? 'Guest')) ?>
                             </small>
                         </div>
                     </a>
