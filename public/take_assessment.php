@@ -53,6 +53,9 @@ $activeAttempt = $stmt->fetch();
 
 // Handle start new attempt or resume
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['start_assessment'])) {
+    // Add CSRF validation
+    requireValidCSRFToken();
+    
     // Check attempt limits
     if ($assessment['attempts_allowed']) {
         $stmt = $pdo->prepare("SELECT COUNT(*) FROM assessment_attempts WHERE assessment_id = ? AND user_id = ?");
@@ -208,6 +211,7 @@ if (!$attemptId) {
             </div>
             
             <form method="POST">
+                <?php csrfField(); ?>
                 <input type="hidden" name="start_assessment" value="1">
                 <button type="submit" class="btn-start mt-4">
                     <i class="fas fa-play-circle"></i> Start Assessment
@@ -248,6 +252,9 @@ while ($row = $stmt->fetch()) {
 
 // Handle answer submission via AJAX
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_answer'])) {
+    // Add CSRF validation for AJAX
+    requireValidCSRFToken();
+    
     $questionId = (int)$_POST['question_id'];
     $selectedOption = $_POST['selected_option'] ?? '';
     
@@ -303,6 +310,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_answer'])) {
 
 // Handle final submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_assessment'])) {
+    // Add CSRF validation
+    requireValidCSRFToken();
     
     // Calculate final score
     $stmt = $pdo->prepare("
@@ -330,6 +339,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_assessment']))
 
 // Handle time expiry auto-submit
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['time_expired'])) {
+    // Add CSRF validation
+    requireValidCSRFToken();
+    
     // Same as submit_assessment but forced
     $stmt = $pdo->prepare("
         SELECT SUM(points_earned) as earned FROM assessment_answers WHERE attempt_id = ?
@@ -398,6 +410,11 @@ $firstQuestion = $questions[0];
             padding: 0.5rem 1.5rem;
             font-weight: 700;
             font-size: 1.3rem;
+        }
+        .timer.grace {
+            background: #dc3545;
+            border-color: #a71d2a;
+            box-shadow: 3px 3px 0 #7a151f;
         }
         .progress-info {
             background: #1d6fb0;
@@ -642,6 +659,9 @@ $firstQuestion = $questions[0];
     </div>
 
     <script>
+        // Get CSRF token from meta tag
+        const csrfToken = <?= json_encode(getCSRFToken()) ?>;
+        
         const questions = <?= json_encode($questions) ?>;
         const totalQuestions = <?= $totalQuestions ?>;
         const savedAnswers = <?= json_encode($savedAnswers) ?>;
@@ -651,6 +671,8 @@ $firstQuestion = $questions[0];
         let timeLeft = <?= $assessment['time_limit'] ? $assessment['time_limit'] * 60 : 0 ?>;
         let formChanged = false;
         let isSubmitting = false;
+        let inGracePeriod = false;
+        const GRACE_PERIOD = 10; // 10 seconds grace period
 
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
@@ -734,7 +756,7 @@ $firstQuestion = $questions[0];
                 gridBtn.classList.add('answered');
             }
             
-            // Save immediately
+            // Save immediately with CSRF token
             saveAnswer(questionId, letter);
             updateAnsweredCount();
         }
@@ -748,7 +770,8 @@ $firstQuestion = $questions[0];
                 body: new URLSearchParams({
                     'save_answer': '1',
                     'question_id': questionId,
-                    'selected_option': letter
+                    'selected_option': letter,
+                    'csrf_token': csrfToken
                 })
             }).catch(error => console.error('Error saving:', error));
         }
@@ -813,11 +836,16 @@ $firstQuestion = $questions[0];
             
             const form = document.createElement('form');
             form.method = 'POST';
-            const input = document.createElement('input');
-            input.type = 'hidden';
-            input.name = 'submit_assessment';
-            input.value = '1';
-            form.appendChild(input);
+            const csrfInput = document.createElement('input');
+            csrfInput.type = 'hidden';
+            csrfInput.name = 'csrf_token';
+            csrfInput.value = csrfToken;
+            form.appendChild(csrfInput);
+            const submitInput = document.createElement('input');
+            submitInput.type = 'hidden';
+            submitInput.name = 'submit_assessment';
+            submitInput.value = '1';
+            form.appendChild(submitInput);
             document.body.appendChild(form);
             form.submit();
         });
@@ -827,28 +855,51 @@ $firstQuestion = $questions[0];
             
             const timer = setInterval(() => {
                 if (timeLeft <= 0) {
-                    clearInterval(timer);
-                    // Auto-submit when time expires
-                    const form = document.createElement('form');
-                    form.method = 'POST';
-                    const input = document.createElement('input');
-                    input.type = 'hidden';
-                    input.name = 'time_expired';
-                    input.value = '1';
-                    form.appendChild(input);
-                    document.body.appendChild(form);
-                    form.submit();
-                    return;
+                    if (!inGracePeriod && GRACE_PERIOD > 0) {
+                        // Enter grace period
+                        inGracePeriod = true;
+                        timerDisplay.classList.add('grace');
+                        timeLeft = GRACE_PERIOD;
+                        timerDisplay.textContent = `GRACE: ${timeLeft}s`;
+                        alert('Time is up! You have 10 seconds grace period to submit your answers.');
+                        return;
+                    } else {
+                        // Grace period ended - auto-submit
+                        clearInterval(timer);
+                        alert('Time expired. Submitting your assessment...');
+                        
+                        // Auto-submit when time expires
+                        const form = document.createElement('form');
+                        form.method = 'POST';
+                        const csrfInput = document.createElement('input');
+                        csrfInput.type = 'hidden';
+                        csrfInput.name = 'csrf_token';
+                        csrfInput.value = csrfToken;
+                        form.appendChild(csrfInput);
+                        const timeInput = document.createElement('input');
+                        timeInput.type = 'hidden';
+                        timeInput.name = 'time_expired';
+                        timeInput.value = '1';
+                        form.appendChild(timeInput);
+                        document.body.appendChild(form);
+                        form.submit();
+                        return;
+                    }
                 }
                 
                 timeLeft--;
-                const minutes = Math.floor(timeLeft / 60);
-                const seconds = timeLeft % 60;
-                timerDisplay.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
                 
-                // Warning when 5 minutes left
-                if (timeLeft === 300) {
-                    alert('5 minutes remaining!');
+                if (!inGracePeriod) {
+                    const minutes = Math.floor(timeLeft / 60);
+                    const seconds = timeLeft % 60;
+                    timerDisplay.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                    
+                    // Warning when 5 minutes left
+                    if (timeLeft === 300) {
+                        alert('5 minutes remaining!');
+                    }
+                } else {
+                    timerDisplay.textContent = `Auto Submit in: ${timeLeft}s`;
                 }
             }, 1000);
         }

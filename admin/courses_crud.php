@@ -107,6 +107,8 @@ return $course && $course['proponent_id'] == $_SESSION['user']['id'];
 ADD COURSE
 ========================= */
 if ($act === 'addform' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    // Add CSRF validation
+    requireValidCSRFToken();
 
 $expires_at = calculateExpiry(
 $_POST['expires_at'] ?? null,
@@ -166,6 +168,8 @@ exit('Access denied: You can only edit your own courses');
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // Add CSRF validation
+    requireValidCSRFToken();
 
 $expires_at = calculateExpiry(
 $_POST['expires_at'] ?? null,
@@ -218,6 +222,9 @@ exit;
 DELETE COURSE
 ========================= */
 if ($act === 'delete' && $id) {
+// Add CSRF validation for GET-based delete
+requireValidCSRFToken();
+
 // Check if user can delete this course
 if (!canModifyCourse($id, $pdo)) {
 http_response_code(403);
@@ -464,6 +471,7 @@ function canCreateAssessment($course_id, $pdo) {
 <div class="form-card">
 <h4><?= $editing ? 'Edit Course' : 'Create New Course' ?></h4>
 <form method="post" enctype="multipart/form-data">
+    <?php csrfField(); ?>
     
     <div class="form-group">
         <label class="form-label">Course Title</label>
@@ -652,7 +660,7 @@ function canCreateAssessment($course_id, $pdo) {
                     <a href="?act=edit&id=<?= $c['id'] ?>" class="btn-edit-course">
                         <i class="fas fa-edit"></i> Edit
                     </a>
-                    <a href="?act=delete&id=<?= $c['id'] ?>" class="btn-delete-course" 
+                    <a href="?act=delete&id=<?= $c['id'] ?>&csrf_token=<?= urlencode(getCSRFToken()) ?>" class="btn-delete-course" 
                        onclick="return confirm('Delete this course? This action cannot be undone.')">
                         <i class="fas fa-trash"></i> Delete
                     </a>
@@ -744,4 +752,4 @@ document.addEventListener('DOMContentLoaded', function () {
 </script>
 
 </body>
-</html> 
+</html>

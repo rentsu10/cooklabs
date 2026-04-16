@@ -14,6 +14,9 @@ if (!$user) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // Add CSRF validation
+    requireValidCSRFToken();
+    
     $fname    = trim($_POST['fname']);
     $lname    = trim($_POST['lname']);
     $email    = trim($_POST['email']);
@@ -83,6 +86,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
         
         <form method="POST" class="profile-card">
+            <?php csrfField(); ?>
             <div class="mb-3">
                 <label for="fname" class="form-label">First Name</label>
                 <input type="text" name="fname" id="fname" class="form-control" required

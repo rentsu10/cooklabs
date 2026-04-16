@@ -16,6 +16,9 @@ $showOTP = false;
 
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // Add CSRF validation for all POST requests
+    requireValidCSRFToken();
+    
 if (isset($_POST['otp_verify'])) {
 // OTP VERIFICATION
 $enteredOTP = $_POST['security_code'] ?? '';
@@ -245,6 +248,7 @@ $timeLeft = 600;
 
             <!-- Registration Form -->
             <form action="../public/register.php" method="POST" id="registerForm">
+                <?php csrfField(); ?>
                 <?php if(!$showOTP): ?>
                 <!-- First Name & Last Name Row -->
                 <div class="form-row">

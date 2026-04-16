@@ -214,6 +214,7 @@ function get_mini_role_badge($role) {
     <!-- ADD FORM -->
     <div class="form-container">
       <form method="post" action="?act=add">
+        <?php csrfField(); ?>
         <label class="form-label">Title</label>
         <input type="text" name="title" class="form-control" placeholder="Enter news title" required>
         
@@ -236,6 +237,7 @@ function get_mini_role_badge($role) {
     <!-- EDIT FORM -->
     <div class="form-container">
       <form method="post" action="?act=edit">
+        <?php csrfField(); ?>
         <input type="hidden" name="id" value="<?= $editNews['id'] ?>">
         
         <label class="form-label">Title</label>
@@ -313,7 +315,7 @@ function get_mini_role_badge($role) {
                 </div>
                 
                 <div class="selected-news-content">
-                    <?= nl2br(htmlspecialchars($selectedNews['body'])) ?>
+                    <?= nl2br((htmlspecialchars($selectedNews['body']))) ?>
                 </div>
                 
                 <?php if (canModifyNews($selectedNews['id'], $pdo)): ?>

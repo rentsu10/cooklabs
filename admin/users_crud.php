@@ -14,7 +14,7 @@ $act = $_GET['act'] ?? '';
 
 // ADD USER WITH EMAIL NOTIFICATION
 if ($act === 'add' && $_SERVER['REQUEST_METHOD'] === 'POST') {
-session_start();
+    requireValidCSRFToken();
 
 $username = trim($_POST['username'] ?? '');
 $password = $_POST['password'] ?? '';
@@ -97,7 +97,7 @@ exit;
 
 // UPDATE USER
 if ($act === 'edit' && $_SERVER['REQUEST_METHOD'] === 'POST') {
-session_start();
+    requireValidCSRFToken();
 
 $id       = (int)$_POST['id'];
 $username = trim($_POST['username'] ?? '');
@@ -156,20 +156,20 @@ header('Location: users_crud.php');
 exit;
 }
 
-// DELETE USER
-if ($act === 'delete' && isset($_GET['id'])) {
-session_start();
-$id = (int)$_GET['id'];
+// DELETE USER (POST handler)
+if ($act === 'delete' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    requireValidCSRFToken();
+    $id = (int)$_POST['id'];
 
-try {
-$pdo->prepare('DELETE FROM users WHERE id = ?')->execute([$id]);
-$_SESSION['success'] = "User deleted successfully";
-} catch (Exception $e) {
-$_SESSION['error'] = "Failed to delete user: " . $e->getMessage();
-}
+    try {
+        $pdo->prepare('DELETE FROM users WHERE id = ?')->execute([$id]);
+        $_SESSION['success'] = "User deleted successfully";
+    } catch (Exception $e) {
+        $_SESSION['error'] = "Failed to delete user: " . $e->getMessage();
+    }
 
-header('Location: users_crud.php');
-exit;
+    header('Location: users_crud.php');
+    exit;
 }
 
 // FETCH USER FOR EDIT
@@ -186,87 +186,87 @@ exit('User not found');
 }
 }
 
-// CONFIRM USER STATUS - UPDATED TO SEND APPROVAL NOTIFICATION
-if (isset($_GET['act']) && $_GET['act'] === 'confirm' && isset($_GET['id'])) {
-session_start();
-$id = (int)$_GET['id'];
+// CONFIRM USER STATUS (POST handler)
+if ($act === 'confirm' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    requireValidCSRFToken();
+    $id = (int)$_POST['id'];
 
-// Get user details before confirming
-$stmt = $pdo->prepare("SELECT * FROM users WHERE id = ?");
-$stmt->execute([$id]);
-$user = $stmt->fetch(PDO::FETCH_ASSOC);
+    // Get user details before confirming
+    $stmt = $pdo->prepare("SELECT * FROM users WHERE id = ?");
+    $stmt->execute([$id]);
+    $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
-if ($user) {
-if ($user['status'] !== 'confirmed') {
-// Update user status
-$update = $pdo->prepare("UPDATE users SET status = 'confirmed' WHERE id = ?");
-$update->execute([$id]);
-$_SESSION['success'] = "User confirmed successfully";
-        
+    if ($user) {
+        if ($user['status'] !== 'confirmed') {
+            // Update user status
+            $update = $pdo->prepare("UPDATE users SET status = 'confirmed' WHERE id = ?");
+            $update->execute([$id]);
+            $_SESSION['success'] = "User confirmed successfully";
+            
+            // Prepare recipient name
+            $recipientName = !empty($user['fname']) ? $user['fname'] : $user['username'];
+            if (!empty($user['lname'])) {
+                $recipientName .= ' ' . $user['lname'];
+            }
+            
+            // SEND APPROVAL NOTIFICATION EMAIL
+            if (function_exists('sendApprovalNotification')) {
+                $emailResult = sendApprovalNotification($user['email'], $recipientName);
+                
+                if ($emailResult['success']) {
+                    $_SESSION['success'] .= " and notification email sent to " . $user['email'];
+                } else {
+                    $_SESSION['warning'] = "User confirmed but notification email failed: " . $emailResult['message'];
+                }
+            }
+        } else {
+            $_SESSION['info'] = "User already confirmed";
+        }
+    } else {
+        $_SESSION['error'] = "User not found";
+    }
+
+    header('Location: users_crud.php');
+    exit;
+}
+
+// REJECT USER (POST handler)
+if ($act === 'reject' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    requireValidCSRFToken();
+    $id = (int)$_POST['id'];
+
+    // Get user details before deleting
+    $stmt = $pdo->prepare("SELECT * FROM users WHERE id = ? AND status = 'pending'");
+    $stmt->execute([$id]);
+    $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if ($user) {
         // Prepare recipient name
         $recipientName = !empty($user['fname']) ? $user['fname'] : $user['username'];
         if (!empty($user['lname'])) {
             $recipientName .= ' ' . $user['lname'];
         }
         
-        // SEND APPROVAL NOTIFICATION EMAIL
-        if (function_exists('sendApprovalNotification')) {
-            $emailResult = sendApprovalNotification($user['email'], $recipientName);
+        // Delete the user
+        $pdo->prepare('DELETE FROM users WHERE id = ? AND status = "pending"')->execute([$id]);
+        $_SESSION['success'] = "User rejected and deleted";
+        
+        // SEND REJECTION EMAIL
+        if (function_exists('sendRejectionNotification')) {
+            $emailResult = sendRejectionNotification($user['email'], $recipientName);
             
             if ($emailResult['success']) {
                 $_SESSION['success'] .= " and notification email sent to " . $user['email'];
             } else {
-                $_SESSION['warning'] = "User confirmed but notification email failed: " . $emailResult['message'];
+                $_SESSION['warning'] = "User rejected but notification email failed: " . $emailResult['message'];
             }
         }
-} else {
-$_SESSION['info'] = "User already confirmed";
-}
-} else {
-$_SESSION['error'] = "User not found";
-}
-
-header('Location: users_crud.php');
-exit;
-}
-
-// REJECT USER (Delete pending user)
-if (isset($_GET['act']) && $_GET['act'] === 'reject' && isset($_GET['id'])) {
-session_start();
-$id = (int)$_GET['id'];
-
-// Get user details before deleting
-$stmt = $pdo->prepare("SELECT * FROM users WHERE id = ? AND status = 'pending'");
-$stmt->execute([$id]);
-$user = $stmt->fetch(PDO::FETCH_ASSOC);
-
-if ($user) {
-    // Prepare recipient name
-    $recipientName = !empty($user['fname']) ? $user['fname'] : $user['username'];
-    if (!empty($user['lname'])) {
-        $recipientName .= ' ' . $user['lname'];
+    } else {
+        $_SESSION['error'] = "User not found or already processed";
     }
-    
-    // Delete the user
-    $pdo->prepare('DELETE FROM users WHERE id = ? AND status = "pending"')->execute([$id]);
-    $_SESSION['success'] = "User rejected and deleted";
-    
-    // SEND REJECTION EMAIL
-    if (function_exists('sendRejectionNotification')) {
-        $emailResult = sendRejectionNotification($user['email'], $recipientName);
-        
-        if ($emailResult['success']) {
-            $_SESSION['success'] .= " and notification email sent to " . $user['email'];
-        } else {
-            $_SESSION['warning'] = "User rejected but notification email failed: " . $emailResult['message'];
-        }
-    }
-} else {
-    $_SESSION['error'] = "User not found or already processed";
-}
 
-header('Location: users_crud.php');
-exit;
+    header('Location: users_crud.php');
+    exit;
 }
 
 // Get all users
@@ -462,6 +462,7 @@ function get_role_badge($role) {
     <div class="form-card">
         <h5><i class="fas fa-user-plus"></i> Add New User</h5>
         <form method="post" action="?act=add">
+            <?php csrfField(); ?>
             <div class="row">
                 <div class="col-md-6 mb-3">
                     <label class="form-label">Username</label>
@@ -510,6 +511,7 @@ function get_role_badge($role) {
     <div class="form-card">
         <h5><i class="fas fa-edit"></i> Edit User - <?= htmlspecialchars($user['username']) ?></h5>
         <form method="post" action="?act=edit">
+            <?php csrfField(); ?>
             <input type="hidden" name="id" value="<?= $user['id'] ?>">
 
             <div class="row">
@@ -605,16 +607,22 @@ function get_role_badge($role) {
                             </span>
                         </td>
                         <td class="table-actions">
-                            <a href="?act=confirm&id=<?= $u['id'] ?>" 
-                                onclick="return confirm('Confirm <?= htmlspecialchars($u['username']) ?>?')" 
-                                class="btn-approve">
-                                <i class="fas fa-check"></i> Approve
-                            </a>
-                            <a href="?act=reject&id=<?= $u['id'] ?>" 
-                                onclick="return confirm('Reject and delete <?= htmlspecialchars($u['username']) ?>?')" 
-                                class="btn-reject">
-                                <i class="fas fa-times"></i> Reject
-                            </a>
+                            <!-- Approve Button - POST Form -->
+                            <form method="POST" action="?act=confirm" style="display: inline;">
+                                <input type="hidden" name="id" value="<?= $u['id'] ?>">
+                                <?php csrfField(); ?>
+                                <button type="submit" class="btn-approve" onclick="return confirm('Confirm <?= htmlspecialchars($u['username']) ?>?')">
+                                    <i class="fas fa-check"></i> Approve
+                                </button>
+                            </form>
+                            <!-- Reject Button - POST Form -->
+                            <form method="POST" action="?act=reject" style="display: inline;">
+                                <input type="hidden" name="id" value="<?= $u['id'] ?>">
+                                <?php csrfField(); ?>
+                                <button type="submit" class="btn-reject" onclick="return confirm('Reject and delete <?= htmlspecialchars($u['username']) ?>?')">
+                                    <i class="fas fa-times"></i> Reject
+                                </button>
+                            </form>
                         </td>
                     </tr>
                     <?php endforeach; ?>
@@ -678,11 +686,14 @@ function get_role_badge($role) {
                             <a href="?act=edit&id=<?= $u['id'] ?>" class="btn-edit">
                                 <i class="fas fa-edit"></i> Edit
                             </a>
-                            <a href="?act=delete&id=<?= $u['id'] ?>" 
-                                onclick="return confirm('Are you sure you want to delete user <?= htmlspecialchars($u['username']) ?>? This action cannot be undone.')" 
-                                class="btn-delete">
-                                <i class="fas fa-trash"></i> Delete
-                            </a>
+                            <!-- Delete Button - POST Form -->
+                            <form method="POST" action="?act=delete" style="display: inline;">
+                                <input type="hidden" name="id" value="<?= $u['id'] ?>">
+                                <?php csrfField(); ?>
+                                <button type="submit" class="btn-delete" onclick="return confirm('Are you sure you want to delete user <?= htmlspecialchars($u['username']) ?>? This action cannot be undone.')">
+                                    <i class="fas fa-trash"></i> Delete
+                                </button>
+                            </form>
                         </td>
                     </tr>
                     <?php endforeach; ?>

@@ -366,9 +366,9 @@ select.form-control {
 .confirmed-table thead th:nth-child(2),
 .confirmed-table tbody td:nth-child(2) { width: 10%; } /* Username */
 .confirmed-table thead th:nth-child(3),
-.confirmed-table tbody td:nth-child(3) { width: 25%; } /* Full Name */
+.confirmed-table tbody td:nth-child(3) { width: 20%; } /* Full Name */
 .confirmed-table thead th:nth-child(4),
-.confirmed-table tbody td:nth-child(4) { width: 15%; } /* Email */
+.confirmed-table tbody td:nth-child(4) { width: 20%; } /* Email */
 .confirmed-table thead th:nth-child(5),
 .confirmed-table tbody td:nth-child(5) { width: 9%; } /* Role */
 .confirmed-table thead th:nth-child(6),

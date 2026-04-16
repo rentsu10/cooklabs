@@ -7,6 +7,9 @@ $error = '';
 $pending_contact = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // Add CSRF validation
+    requireValidCSRFToken();
+    
     $username = trim($_POST['username'] ?? '');
     $password = $_POST['password'] ?? '';
     
@@ -161,6 +164,7 @@ $admin_email = $admin['email'];
 
             <!-- Login Form -->
             <form method="POST" action="" id="loginForm">
+                <?php csrfField(); ?>
                 <!-- Username/Email -->
                 <div class="form-group">
                     <label for="username" class="form-label">Username or Email</label>

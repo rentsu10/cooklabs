@@ -54,7 +54,8 @@ define('SMTP_PASSWORD', 'ahkv dpsl urcn lbmr');
 define('SMTP_FROM_EMAIL', 'learningmanagement576@gmail.com');
 define('SMTP_FROM_NAME', 'CookLabs');
 
-
+// Include CSRF protection
+require_once __DIR__ . '/csrf.php';
 
 ?>
 

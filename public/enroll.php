@@ -8,6 +8,11 @@ if(!isset($_SESSION['user'])) {
     exit;
 }
 
+// Add CSRF validation for POST request
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    requireValidCSRFToken();
+}
+
 $userId = $_SESSION['user']['id'];
 $courseId = intval($_POST['course_id'] ?? 0);
 
@@ -36,7 +41,7 @@ if($enrollment) {
     exit;
 }
 
-// Enroll the user - REMOVED total_time_seconds
+// Enroll the user
 $stmt = $pdo->prepare("INSERT INTO enrollments (user_id, course_id, enrolled_at, status, progress) VALUES (?, ?, NOW(), 'ongoing', 0)");
 $stmt->execute([$userId, $courseId]);
 

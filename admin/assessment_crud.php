@@ -41,6 +41,8 @@ $assessment = $stmt->fetch();
 
 // Handle form submission for assessment settings and questions
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_assessment'])) {
+    // Add CSRF validation
+    requireValidCSRFToken();
     
     $title = trim($_POST['title'] ?? '');
     $description = trim($_POST['description'] ?? '');
@@ -407,6 +409,7 @@ if ($assessment) {
         <?php endif; ?>
 
         <form method="POST" id="assessmentForm">
+            <?php csrfField(); ?>
             <input type="hidden" name="save_assessment" value="1">
             
             <!-- Assessment Settings Card -->
