@@ -3,9 +3,9 @@ session_start();
 
 // Database connection
 $host = 'localhost';
-$db   = 'cooklabs_db';
-$user = 'root';
-$pass = '';
+$db   = 'unbqpzjyyt';
+$user = 'unbqpzjyyt';
+$pass = 'Noodles.418';
 $charset = 'utf8mb4';
 
 $dsn = "mysql:host=$host;dbname=$db;charset=$charset";
