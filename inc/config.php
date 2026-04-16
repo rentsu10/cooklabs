@@ -5,7 +5,7 @@ session_start();
 $host = 'localhost';
 $db   = 'unbqpzjyyt';
 $user = 'unbqpzjyyt';
-$pass = 'Noodles.418';
+$pass = 'AffK7qw65Y';
 $charset = 'utf8mb4';
 
 $dsn = "mysql:host=$host;dbname=$db;charset=$charset";
